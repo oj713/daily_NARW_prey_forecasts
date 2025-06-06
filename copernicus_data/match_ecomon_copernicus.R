@@ -147,6 +147,10 @@ matched_emon_coper <- seq_along(emon_groups) |>
   lapply(match_date_records) |> 
   bind_rows()
 
+# Any NA values? 1 identified
+NA_rows <- which(!complete.cases(matched_emon_coper))
+matched_emon_coper <- matched_emon_coper[-NA_rows,]
+
 ############# Save to file
 
 root <- "/mnt/ecocast/projectdata/students/ojohnson/copernicus"
