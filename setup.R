@@ -4,19 +4,29 @@ suppressPackageStartupMessages(
     library(ncdf4) # querying data 
     library(tidymodels)
     library(purrr)
+    library(sf)
+    library(lubridate)
   })
 
 ### PREDICTION AND PLOT HELPERS
-plot_gen <- function(data, plot_col, title = "Plot", size = .3) {
-  ggplot(data, aes(x = longitude, y = latitude)) +
+plot_gen <- function(data, plot_col, title = "Plot", size = .3, log_col = FALSE) {
+  p <- ggplot(data, aes(x = longitude, y = latitude)) +
     geom_polygon(data = ggplot2::map_data("world"), 
                  aes(long, lat, group = group),
                  fill = "lightgray", col = "gray") +
-    geom_point(aes(col = get(plot_col)), alpha = .7, size = size) +
-    coord_quickmap(xlim = c(-76, -40), ylim = c(35, 60), expand = TRUE) +
-    labs(col = plot_col) +
+    coord_quickmap(xlim = c(-76, -60), ylim = c(35, 50), expand = TRUE) +
     theme_bw() + 
     ggtitle(title)
+  
+  if (log_col) {
+    p + 
+      geom_point(aes(col = log(get(plot_col) + 1)), alpha = .7, size = size) + 
+      labs(col = paste(plot_col, "(log[x + 1])"))
+  } else {
+    p + 
+      geom_point(aes(col = get(plot_col)), alpha = .7, size = size) + 
+      labs(col = plot_col)
+  }
 }
 
 #' Saves a plot object to file
@@ -31,7 +41,7 @@ save_pdf_ecocast <- function(plot_obj, filename, root) {
 
 # Returns a list of variable abbreviations
 var_abb <- function() {
-  list(Bathy_depth = "Bathymetry", 
+  list(bathymetry = "Bathymetry", 
        mlotst = "Mixed layer depth", 
        thetao = "Surface temperature", 
        bottomT = "Bottom temperature", 
