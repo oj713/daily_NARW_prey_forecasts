@@ -5,6 +5,7 @@ suppressPackageStartupMessages(
     library(tidymodels)
     library(purrr)
     library(sf)
+    library(lubridate)
   })
 
 ### PREDICTION AND PLOT HELPERS
