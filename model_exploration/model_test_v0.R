@@ -42,6 +42,9 @@ results <- augment(fitted_wkf, testing(mec_split))
 
 my_metrics <- metric_set(roc_auc, sens, spec, accuracy)
 
-my_metrics(results, truth = patch, estimate = .pred_class, .pred_TRUE, event_level = "second")
+fitted_wkf |>
+  saveRDS("test_model_v0.csv.gz")
 
-roc_curve(results, truth = patch, .pred_FALSE) |> autoplot()
+# my_metrics(results, truth = patch, estimate = .pred_class, .pred_TRUE, event_level = "second")
+
+# roc_curve(results, truth = patch, .pred_FALSE) |> autoplot()
