@@ -1,11 +1,13 @@
-library(viridis)
-library(ggplot2)
-library(copernicus)
-library(andreas)
+source("setup.R")
 
 ### Plotting function
 fitted_wkf <- readRDS("test_model_v0.csv.gz")
 
+root_md <- "/mnt/ecocast/projectdata/students/ojohnson/copernicus/model_data"
+explotdata <- readr::read_csv(file.path(root_md, "2015_07_01_exdata_ET.csv.gz"))
+
+explotdata_predictable <- explotdata |>
+  
 coper_predictable <- coper_data |>
   as_tibble() |>
   na.omit() |>

@@ -4,6 +4,8 @@ library(andreas)
 library(dplyr)
 library(stars)
 
+source("setup.R")
+
 root <- "/mnt/ecocast/projectdata/students/ojohnson/copernicus/model_data"
 
 ## Copernicus Data for example date: July 1st, 2015
@@ -30,8 +32,55 @@ coper_bathy <- coper_data
 coper_bathy$bathy_depth <- bathy_depth_stars
 plot(coper_bathy[8])
 
-coper_bathy |>
+### NA examination
+cb_tib <- coper_bathy |>
   as_tibble() |>
+  mutate(across(c(x, y), ~round(.x * 12), .names = "{.col}.12"))
+bathy_depth_tib <- bathy_depth_stars |>
+  as_tibble() |>
+  mutate(across(c(x, y), ~round(.x * 12), .names = "{.col}.12"))
+  
+# Which rows have incorrectly marked NA bathymetry? n = 707
+coper_complete <- which(complete.cases(dplyr::select(cb_tib, -bathy_depth)))
+bathy_nas <- which(is.na(cb_tib$bathy_depth))
+na_matched_indices <- coper_complete[coper_complete %in% bathy_nas]
+
+fixed_cb_tib <- bfs_mismatched_indices(na_matched_indices, 
+                                       cb_tib, 
+                                       bathy_depth_tib,
+                                       .col = "bathy_depth", 
+                                       .match_cols = list("lon" = "x.12", 
+                                                          "lat" = "y.12"))
+plot_base <- fixed_cb_tib |>
+  filter(!is.na(search_radius)) |>
+  ggplot() + 
+  geom_polygon(data = ggplot2::map_data("world"), 
+               aes(x = long, y = lat, group = group),
+               fill = "lightgray", col = "gray") +
+  coord_quickmap(xlim = c(-76, -50), ylim = c(35, 57), expand = TRUE) +
+  theme_bw() + 
+  theme(legend.position = "bottom")
+
+displacement_chart <- plot_base +
+  geom_segment(aes(x = x, y = y, xend = x.12/12, yend = y.12/12, color = search_radius),
+               arrow = arrow(length = unit(0.1,"cm")), linewidth = .2) +
+  labs(x = "Longitude", y = "Latitude", col = "Search Radius (x * 1/12°)") + 
+  scale_color_viridis(direction = -1) + 
+  ggtitle("Bathymetry Displacement")
+na_matched_bathy <- plot_base + 
+  geom_point(aes(x = x, y = y, col = bathy_depth)) + 
+  scale_color_viridis(option = "turbo") + 
+  labs(x = "Longitude", y = "Latitude", col = "Bathymetry (fixed)") + 
+  ggtitle("NA-fixed Bathymetry Locations")
+
+save_pdf_ecocast(list(na_matched_bathy, displacement_chart), 
+                 "plots/fullrange_NAmatchedbathyfix_ET_coper", root)
+
+### Saving materials to file
+
+predictable_fixed_cb <- fixed_cb_tib |> dplyr::select(x:bathy_depth)
+predictable_fixed_cb <- predictable_fixed_cb[complete.cases(predictable_fixed_cb),]
+predictable_fixed_cb |>
   readr::write_csv(file.path(root, "2015_07_01_exdata_etopo.csv.gz"))
 
 bathy_depth_stars |>

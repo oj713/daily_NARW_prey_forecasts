@@ -48,7 +48,8 @@ coper_data[1,,,1] |> plot() # Plotting, no land area included
 #' 
 #' Existing issues: Some data points may match to land-based Copernicus, in which
 #' case breadth-based search identifies a nearby ocean-based point. This algorithm 
-#' should NOT be used if there are many land-matched coordinates or far-inland coordinates.
+#' should NOT be used if there are many land-matched coordinates, far-inland coordinates,
+#' or mismatched coordinates right at the edge of the available dataset.
 #' Could be target for a later fix, if necessary.
 
 coper_x <- st_get_dimension_values(coper_data, 'x', center = TRUE)
@@ -99,6 +100,7 @@ match_date_records <- function(day, species_data_groups = emon_groups) {
     coper_tibble <- coper_data[,lon_index, lat_index, day] |> as_tibble()
     
     # In rare instances, the closest copernicus point might be an NA land-based value
+    # This is basically the same thing as bfs_mismatched_indices() in setup.R
     if (coper_tibble$bottomT[[1]] |> is.na()) {
       # Widen the search -- see if any neighboring cells are ocean-based. 
       ocean_found <- FALSE
