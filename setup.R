@@ -6,16 +6,21 @@ suppressPackageStartupMessages(
     library(purrr)
     library(sf)
     library(lubridate)
+    library(viridis)
   })
 
 ### PREDICTION AND PLOT HELPERS
-plot_gen <- function(data, plot_col, title = "Plot", size = .3, log_col = FALSE) {
-  p <- ggplot(data, aes(x = longitude, y = latitude)) +
+plot_gen <- function(data, plot_col, title = "Plot", 
+                     size = .3, log_col = FALSE, 
+                     xy_names = c("longitude", "latitude")) {
+  p <- ggplot(data, aes(x = get(xy_names[[1]]), y = get(xy_names[[2]]))) +
     geom_polygon(data = ggplot2::map_data("world"), 
                  aes(long, lat, group = group),
                  fill = "lightgray", col = "gray") +
+    labs(x = "Longitude", y = "Latitude") +
     coord_quickmap(xlim = c(-76, -60), ylim = c(35, 50), expand = TRUE) +
     theme_bw() + 
+    scale_color_viridis() +
     ggtitle(title)
   
   if (log_col) {
