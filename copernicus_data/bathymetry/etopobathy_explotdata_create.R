@@ -81,7 +81,7 @@ save_pdf_ecocast(list(na_matched_bathy, displacement_chart),
 predictable_fixed_cb <- fixed_cb_tib |> dplyr::select(x:bathy_depth)
 predictable_fixed_cb <- predictable_fixed_cb[complete.cases(predictable_fixed_cb),]
 predictable_fixed_cb |>
-  readr::write_csv(file.path(root, "2015_07_01_exdata_etopo.csv.gz"))
+  readr::write_csv(file.path(root, "2015_07_01_exdata_ET.csv.gz"))
 
 bathy_depth_stars |>
   as_tibble() |>

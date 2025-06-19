@@ -6,7 +6,7 @@ library(sf)
 
 root <- "/mnt/ecocast/projectdata/students/ojohnson/copernicus/model_data"
 
-mec <- readr::read_csv(file.path(root, "matched_ecomon_copernicus_physical_nwa.csv.gz"))
+mec <- get_input_data("matched_ecomon_copernicus_physical_nwa.csv.gz")
 
 ######### Retrieve bathymetry data for a new dataset with new lat/lon coords
 

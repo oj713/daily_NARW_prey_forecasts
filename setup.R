@@ -21,6 +21,14 @@ save_pdf_ecocast <- function(plot_obj, filename, root) {
   dev.off()
 } 
 
+#' Reads a csv file from the input_data folder
+#' @param filename str, filename with extension
+#' @return data frame
+get_input_data <- function(filename) {
+  root <- "/mnt/ecocast/projectdata/students/ojohnson/copernicus/input_data"
+  readr::read_csv(file.path(root, filename), col_types = readr::cols())
+}
+
 
 ### PREDICTION AND PLOT HELPERS
 plot_gen <- function(data, plot_col, title = "Plot", 

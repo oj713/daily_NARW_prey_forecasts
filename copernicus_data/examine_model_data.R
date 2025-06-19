@@ -1,8 +1,4 @@
-library(ggplot2)
-library(viridis)
-library(dplyr)
-library(purrr)
-
+source("setup.R")
 
 root <- "/mnt/ecocast/projectdata/students/ojohnson/copernicus/model_data"
 
@@ -12,9 +8,7 @@ save_eda <- function(obj, filename) {
   obj
 }
 
-mec <- readr::read_csv(file.path(root, 
-                                 "mec_brickman_bathy.csv.gz"), 
-                       show_col_types = FALSE)
+mec <- get_input_data("mec_bathy_BR.csv.gz")
 nrow(mec)
 
 #' Plots each variable on a map

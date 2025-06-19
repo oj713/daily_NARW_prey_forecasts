@@ -3,7 +3,7 @@ title: "improving_sensitivity"
 output: html_document
 ---
 
-We would like to improve the sensitivity of the model from the currently very low sensitivity value of .438
+We would like to improve the sensitivity of the model from the currently very low sensitivity value of .431
 
 ```{r}
 source("model_test_v0.R") # Load the base model version

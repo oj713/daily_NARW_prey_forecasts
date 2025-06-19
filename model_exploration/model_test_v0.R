@@ -1,8 +1,6 @@
 source("setup.R")
 
-root <- "/mnt/ecocast/projectdata/students/ojohnson/copernicus/model_data"
-mec <- readr::read_csv(file.path(root, "mec_brickman_bathy.csv.gz"),
-                       col_types = readr::cols())
+mec <- get_input_data("mec_bathy_ET.csv.gz")
 
 abundance_threshold <- 30000
 
@@ -15,9 +13,9 @@ mec_split <- initial_split(mec, prop = .75, strata = patch)
 
 ### Create a workflow
 recipe_spec <- 
-  recipe(patch ~ bathymetry + vel + month + mlotst + bottomT + thetao + so,
+  recipe(patch ~ bathy_depth + vel + month + mlotst + bottomT + thetao + so,
          data = training(mec_split)) |>
-  step_log(bathymetry, offset = 1, base = 10) |>
+  step_log(bathy_depth, offset = 1, base = 10) |>
   step_normalize(all_numeric_predictors()) |>
   step_dummy(all_nominal_predictors())
 
@@ -43,8 +41,4 @@ results <- augment(fitted_wkf, testing(mec_split))
 my_metrics <- metric_set(roc_auc, sens, spec, accuracy)
 
 fitted_wkf |>
-  saveRDS("test_model_v0.csv.gz")
-
-# my_metrics(results, truth = patch, estimate = .pred_class, .pred_TRUE, event_level = "second")
-
-# roc_curve(results, truth = patch, .pred_FALSE) |> autoplot()
+  saveRDS("model_exploration/test_model_v0.csv.gz")

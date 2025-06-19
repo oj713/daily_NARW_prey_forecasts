@@ -2,10 +2,10 @@ source("setup.R")
 
 # Matching data to etopo bathymetry coordinates
 
-root <- "/mnt/ecocast/projectdata/students/ojohnson/copernicus/model_data"
+root <- "/mnt/ecocast/projectdata/students/ojohnson/copernicus/input_data"
 
-mec <- readr::read_csv(file.path(root, "matched_ecomon_copernicus_physical_nwa.csv.gz"))
-etopo_bathy <- readr::read_csv(file.path(root, "bathymetry/bathy_depth_ET_nwa.csv.gz"))
+mec <- get_input_data("matched_ecomon_copernicus_physical_nwa.csv.gz")
+etopo_bathy <- get_input_data("bathymetry/bathy_depth_ET_nwa.csv.gz")
 
 # Converting each coordinate to integer values representing degree position in twelfths
 mec_joinable <- mec |>

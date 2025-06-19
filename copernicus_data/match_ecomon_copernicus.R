@@ -158,7 +158,7 @@ matched_emon_coper <- matched_emon_coper[-NA_rows,]
 root <- "/mnt/ecocast/projectdata/students/ojohnson/copernicus"
 
 readr::write_csv(matched_emon_coper,
-                 file = file.path(root, "model_data/matched_ecomon_copernicus_physical_nwa.csv.gz"))
+                 file = file.path(root, "input_data/matched_ecomon_copernicus_physical_nwa.csv.gz"))
 
 # Examine values that were matched to land-based coordinates in original code
 if (FALSE) {
