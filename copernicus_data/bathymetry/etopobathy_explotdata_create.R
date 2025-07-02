@@ -6,7 +6,7 @@ library(stars)
 
 source("setup.R")
 
-root <- "/mnt/ecocast/projectdata/students/ojohnson/copernicus/model_data"
+root <- "/mnt/ecocast/projectdata/students/ojohnson/copernicus/input_data"
 
 ## Copernicus Data for example date: July 1st, 2015
 example_date <- "2015-07-01"

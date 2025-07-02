@@ -15,7 +15,8 @@ suppressPackageStartupMessages(
 #' @param plot_obj, obj to save to pdf
 #' @param filename str, name of file excluding .pdf
 #' @param root root folder location
-save_pdf_ecocast <- function(plot_obj, filename, root) {
+save_pdf_ecocast <- function(plot_obj, filename, 
+                             root = "/mnt/ecocast/projectdata/students/ojohnson/copernicus/input_data") {
   pdf(file.path(root, paste0(filename, ".pdf")))
   print(plot_obj)
   dev.off()
