@@ -1,6 +1,4 @@
 source("setup.R") # loads some more packages, e.g. dplyr, ggplot2, viridis
-library(copernicus)
-library(andreas)
 library(raster)
 library(stars)
 library(lubridate)
