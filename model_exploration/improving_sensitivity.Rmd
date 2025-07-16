@@ -1,0 +1,49 @@
+---
+title: "improving_sensitivity"
+output: html_document
+---
+
+We would like to improve the sensitivity of the model from the currently very low sensitivity value of .431
+
+```{r}
+source("model_test_v0.R") # Load the base model version
+
+my_metrics(results, truth = patch, estimate = .pred_class, .pred_TRUE, event_level = "second")
+```
+
+## Adjust Classification Threshold
+
+By default, ≥ .5 is a patch. Lowering this threshold can improve the sensitivity of the model, at the expense of specificity.
+
+```{r}
+# Roc curve illustrates tradeoff between sensitivity and specificity
+roc_curve(results, truth = patch, .pred_FALSE) |> autoplot()
+
+# using phi threshold from Johnson et al. 2025
+altered_patchpreds <- results |>
+  mutate(newpredclass = factor(.pred_TRUE >= .2))
+
+my_metrics(altered_patchpreds, truth = patch, estimate = newpredclass, .pred_TRUE, event_level = "second")
+#conf_mat(altered_patchpreds, patch, newpredclass)
+```
+## Optimizing tuning for alternative performance metric
+
+Optimizing tuning to maximize sensitivity or F1 score rather than AUC
+
+## Handle class imbalance via modifications to input dataset
+
+Upsample the minority class or downsample the majority class with `step_upsample()` and `step_downsample()`
+
+Can also doing this using SMOTE (`themis`) package in tidymodels, class weights (`scale_pos_weight`)
+
+## Feature Engineering
+
+New interaction terms, domain-informed variables, etc.
+
+Use feature importance to assess what drives decisions.
+
+## Post-processing ensemble
+
+Try combining model with mechanistic model or one prioritizing sensitivity
+
+

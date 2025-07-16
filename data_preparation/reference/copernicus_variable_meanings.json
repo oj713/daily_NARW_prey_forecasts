@@ -1,0 +1,88 @@
+[
+  {"class": "Physical"
+    "members": {
+    {
+      "Variable Name": "zos",
+      "Units": "m",
+      "Meaning": "sea surface height"
+    },
+    {
+      "Variable Name": "mlotst",
+      "Units": "m",
+      "Meaning": "mixed layer depth"
+    },
+    {
+      "Variable Name": "pbo",
+      "Units": "m",
+      "Meaning": "sea water pressure at sea floor"
+    },
+    {
+      "Variable Name": "tob",
+      "Units": "°C",
+      "Meaning": "sea bottom temperature"
+    },
+    {
+      "Variable Name": "sob",
+      "Units": "psu",
+      "Meaning": "sea bottom salinity"
+    },
+    {
+      "Variable Name": "so",
+      "Units": "psu",
+      "Meaning": "sea salinity"
+    },
+    {
+      "Variable Name": "thetao",
+      "Units": "°C",
+      "Meaning": "potential temperature"
+    },
+    {
+      "Variable Name": "vo",
+      "Units": "m/s",
+      "Meaning": "northward current velocity"
+    },
+    {
+      "Variable Name": "wo",
+      "Units": "m/s",
+      "Meaning": "upward current velocity"
+    },
+    {
+      "Variable Name": "uo",
+      "Units": "m/s",
+      "Meaning": "eastward current velocity"
+    }
+  }},
+  {"class": "Biogeochemical"
+    "members": {
+    {
+      "Variable Name": "o2",
+      "Units": "mmol m-3",
+      "Meaning": "Dissolved Oxygen"
+    },
+    {
+      "Variable Name": "nppv",
+      "Units": "mg m-3 day-1",
+      "Meaning": "net primary productivity of phytoplankton"
+    },
+    {
+      "Variable Name": "po4",
+      "Units": "mmol m-3",
+      "Meaning": "phosphate"
+    },
+    {
+      "Variable Name": "no3",
+      "Units": "mmol m-3",
+      "Meaning": "nitrate"
+    },
+    {
+      "Variable Name": "si",
+      "Units": "mmol m-3",
+      "Meaning": "Dissolved Silicate"
+    },
+    {
+      "Variable Name": "chl",
+      "Units": "mg m-3",
+      "Meaning": "total chlorophyll"
+    }
+  }}
+]
