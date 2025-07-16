@@ -1,0 +1,242 @@
+---
+title: "Seasonality Experiments"
+output: 
+  html_document:
+    toc: true
+    theme: cerulean
+---
+
+**What is the best way to represent seasonality for the jellyfish dataset?**
+
+```{r setup}
+source("../../setup.R")
+suppressPackageStartupMessages({library(gridExtra)})
+
+jec <- get_input_data("jelly_coper_all_revised.csv.gz")
+
+jec <- jec |>
+  mutate(presence = (ind_m2 > 0) |> factor(), 
+         vel = sqrt(uo^2 + vo^2),
+         month = lubridate::month(date) |> factor(levels = 1:12), 
+         day_of_year = lubridate::yday(date))
+
+head(jec)
+```
+
+# Options for Representation
+
+## 1. Month as factor
+
+Self-explanatory.
+
+## 2. Day-of-year
+
+Also self-explanatory.
+
+## 3. Day length + derivative of day length
+
+Day length can be calculated as a function of latitude and day of year. 
+Derivative here is approximated as the difference between day length for one day and the next.
+Derivative is optional and omitted in some cases. 
+
+[Formula to approximate solar declination angle](https://www.pveducation.org/pvcdrom/properties-of-sunlight/declination-angle)
+
+[Formula to approximate day length](https://www.researchgate.net/post/Geometrically_Derived_Formula_for_Day_Length_Based_on_Latitude_and_Time_of_Year)
+
+```{r day_length}
+#' Approximates solar declination angle, helper
+get_soldecang <- function(day_of_year) {
+  -23.45 * cos((360 / 365) * (day_of_year + 10) * pi/180)
+}
+
+#' Approximates length of day
+get_daylength <- function(day_of_year, latitude) {
+  24/pi * acos(-tan(latitude * pi/180) * tan(get_soldecang(day_of_year) * pi/180))
+}
+
+#' Approximates derivative of length of day
+get_ddx_daylength <- function(day_of_year, latitude) {
+  p1 <- get_daylength(day_of_year, latitude)
+  p2 <- get_daylength(day_of_year + 1, latitude)
+  return(p2-p1)
+}
+
+jec <- jec |>
+  mutate(day_length = get_daylength(day_of_year, lat), 
+         ddx_day_length = get_ddx_daylength(day_of_year, lat))
+
+grid.arrange(
+  ggplot(jec, aes(x = day_of_year, col = lat, y = day_length)) + geom_line() +
+    ggtitle("Day length (calculated)"), 
+  ggplot(jec, aes(x = day_of_year, col = lat, y = ddx_day_length)) + geom_line() +
+    ggtitle("Derivative of day length (approximate)"))
+```
+
+## 4. Rolling seasonality
+
+Having variables representing the percentage of each season relative to the centrepoints of summer, spring, fall, winter. sharper curves than sin/cosine relationships are less realistic to real conditions
+
+This involves some approximates as the exact dates of equinoxes do vary by a day or two year-by-year
+
+```{r rolling_seasonality}
+season_axes <- list(spring = 79, # Mar 20
+                    summer = 171, # Jun 20
+                    fall = 265, # Sep 22
+                    winter = 355) # Dec 21
+
+# Calculates how close a date is to a reference date as a percentage
+# 1 represents the same date, 0 represents half a year away
+percent_month <- function(day_of_year, reference) {
+  1 - pmin(
+    abs(reference - day_of_year),
+    365 - abs(reference - day_of_year)
+  )/365*2
+}
+
+# omitting fall and winter since fall = 1 - spring, winter = 1 - summer
+rolling_cols <- season_axes[c("spring", "summer")] |>
+  lapply(function(x) percent_month(jec$day_of_year, x)) |>
+  bind_cols() |>
+  rename(percent_spring = spring, percent_summer = summer)
+
+jec <- bind_cols(jec, rolling_cols)
+
+# Plot
+season_axes[c("spring", "summer")] |>
+  lapply(function(x) percent_month(1:365, x)) |>
+  bind_cols() |>
+  mutate(x = 1:365) |>
+  ggplot(aes(x = x)) + 
+    geom_line(aes(y = spring), col = "violetred4") + 
+    geom_line(aes(y = summer), col = "yellowgreen") + 
+  theme_bw() + 
+  labs(x = "Day of Year", y = "Percent spring (dark pink) and summer (light green)", 
+       title = "Rolling seasonality")
+```
+
+## 5. Height and Direction of the sun
+
+Using the [`suncalc`](https://www.rdocumentation.org/packages/suncalc/versions/0.5.1) package to calculate height and azimuth based on date/lat/lon
+
+There is less of an obvious distinction between spring and fall in this case
+
+```{r height_azimuth}
+suppressPackageStartupMessages({library(suncalc)})
+
+jec <- jec |>
+  bind_cols(suncalc::getSunlightPosition(data = jec) |>
+    select(sun_altitude = altitude, sun_azimuth = azimuth))
+
+grid.arrange(
+  ggplot(jec, aes(x = day_of_year, col = lat, y = sun_altitude)) + geom_line() +
+    ggtitle("Sun Altitude"), 
+  ggplot(jec, aes(x = day_of_year, col = lat, y = sun_azimuth)) + geom_line() +
+    ggtitle("Sun Azimuth"))
+```
+
+# Comparing
+
+Ok, we have 5 options for how to represent seasonality. How do they compare??
+
+```{r workflow_set_creation}
+jec_split <- initial_split(jec, prop = .75, strata = presence)
+folds <- vfold_cv(training(jec_split), v = 5, repeats = 1, strata = presence)
+
+# Creating recipes with each set of possible time variables
+seasonality_options <- list(
+  "month_factor" = c("month"), 
+  "day_of_year" = c("day_of_year"), 
+  "day_length_ddx" = c("day_length", "ddx_day_length"), 
+  "rolling" = c("percent_spring", "percent_summer"), 
+  "sun_position" = c("sun_altitude", "sun_azimuth"), 
+  "day_length" = c("day_length")
+)
+
+id_variables_base <- 
+  c("date", "ind_m2", "depth", "lon", "lat", "uo", "vo", "month", 
+    "day_of_year", "day_length", "ddx_day_length", "percent_spring", 
+    "percent_summer", "sun_altitude", "sun_azimuth")
+
+# Helper - creates a recipe using a specific set of seasonality variables
+create_recipe_variant <- function(seasonality_vars) {
+  id_vars <- id_variables_base[!(id_variables_base %in% seasonality_vars)]
+  
+  recipe(presence ~ .,
+         data = training(jec_split)) |>
+  update_role(all_of(id_vars), new_role = "id") |> # Critical line
+  step_log(bathy_depth, offset = 1, base = 10) |>
+  step_normalize(all_numeric_predictors()) |>
+  step_dummy(all_nominal_predictors())
+}
+
+recipe_list <- seasonality_options |>
+  lapply(create_recipe_variant)
+
+model_spec <- boost_tree() |>
+  set_mode("classification") |>
+  set_engine("xgboost") |>
+  set_args(trees = 500,
+           learn_rate = .1,
+           tree_depth = 4,
+           mtry = 5,
+           min_n = 10)
+
+time_workflows <- workflow_set(recipe_list, list(model_spec), cross = TRUE)
+
+# Fitting all workflows & collecting metrics
+wkfs_results <- time_workflows |>
+  workflow_map(fn = "fit_resamples", # method to apply in quotes
+               verbose = FALSE, 
+               seed = 400, 
+               resamples = folds, # arguments for fn 
+               metrics =  metric_set(roc_auc, sens, spec, accuracy),
+               control = control_resamples(save_pred = TRUE, save_workflow = TRUE))
+```
+
+```{r}
+wkfs_results |>
+  rank_results(rank_metric = "roc_auc")
+
+better_titles <- list(
+  "day_length_ddx_boost_tree" = "Day Length + ddx", 
+  "day_of_year_boost_tree" = "Day of Year", 
+  "month_factor_boost_tree" = "Factored Month", 
+  "rolling_boost_tree" = "Season Percents",
+  "sun_position_boost_tree" = "Sun Height, Azimuth", 
+  "day_length_boost_tree" = "Day Length only"
+)
+
+wkfs_results |>
+  rank_results(rank_metric = "roc_auc") |>
+  ggplot(aes(x = better_titles[wflow_id] |> unlist(), 
+             y = mean, 
+             col = better_titles[wflow_id] |> unlist())) + 
+  facet_wrap(~.metric, scales = "free_y") + 
+  geom_point() + 
+  geom_errorbar(aes(
+    ymin = mean - std_err * 1.96,
+    ymax = mean + std_err * 1.96
+  )) + 
+  theme_bw() + 
+  theme(axis.text.x = element_blank(), 
+        axis.ticks.x = element_blank()) + 
+  labs(x = "Time workflow", y = "Mean performance + 95% CI", col = "Time workflow")
+```
+
+```{r echo = FALSE}
+# Creating a list of trained workflows we could use to plot results
+workflow_list <- wkfs_results$wflow_id |>
+  map(~extract_workflow(wkfs_results, .x)) |>
+  map(~fit(.x, training(jec_split)))
+
+names(workflow_list) <- better_titles[wkfs_results$wflow_id] |> unlist()
+```
+
+
+
+
+
+
+
+
+

@@ -38,7 +38,7 @@ get_input_data <- function(filename) {
 #' @return named list with copernicus path, date range, bounding box, 
 #'  resolution sorted by x/y/starting coord/step, meta database
 get_coper_info <- function(region = c("chfc", "nwa", "world")[[1]], 
-                           type = c("phys", "bgc", "static")) {
+                           type = c("phys", "bgc", "static")[[1]]) {
   if (type == "static") {
     print("Type not yet supported.")
     return(FALSE)
