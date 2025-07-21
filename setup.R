@@ -80,6 +80,47 @@ get_coper_info <- function(region = c("chfc", "nwa", "world")[[1]],
        meta_db = coper_DB)
 }
 
+#' Corrects stars objects with incorrect missing values. Intended for use with Copernicus.
+#' Assumes that the stars object uses NA to both indicate masked values, i.e. land, and missing values.
+#' Assumes that at least half of the attributes are not missing any values. 
+#' @param stars_obj stars, stars object to correct. 
+#' @param replacement_values list, named list of attribute names and a value to sub in for any missing entries.
+#' @return stars object with any incorrect missing values replaced w/ replacement value.
+correct_andreas <- function(stars_obj, 
+                            replacement_values = list("mlotst" = 700)) {
+  na_counts <- sapply(stars_obj, function(x) sum(is.na(x)))
+  # this method does assume that at least half of the attributes aren't missing any data
+  to_correct <- na_counts != median(na_counts)
+  flagged_columns <- names(na_counts[to_correct])
+  
+  # Return if everything is in order
+  if(length(flagged_columns) == 0) {
+    return(stars_obj)
+  }
+  
+  # Check that all columns which are missing values have a specified replacement value
+  accounted <- flagged_columns %in% names(replacement_values)
+  if (!all(accounted)) {
+    stop(paste("A column with missing values does not have a replacement value specified. Affected columns:",
+               paste(flagged_columns[!accounted], collapse = ", ")))
+  }
+  
+  # Which values are supposed to be NAs? i.e. are land mask
+  correct_NAs <- stars_obj |>
+    pull(which(!to_correct)[[1]]) |> # attribute with no missing values
+    is.na()
+  
+  # Replacing missing values
+  for (flag_col in flagged_columns) {
+    # Columns for target value with NA values which aren't supposed to be NA
+    is_missing <- is.na(stars_obj[[flag_col]]) & !correct_NAs
+    
+    stars_obj[[flag_col]][is_missing] <- replacement_values[[flag_col]]
+  }
+  
+  return(stars_obj)
+}
+
 ### PREDICTION AND PLOT HELPERS
 
 #' Plots a generic spatial scatterplot of a value
@@ -92,26 +133,31 @@ get_coper_info <- function(region = c("chfc", "nwa", "world")[[1]],
 #' @return ggplot2 object
 plot_gen <- function(data, plot_col, title = "Plot", 
                      size = .3, log_col = FALSE, 
-                     xy_names = c("longitude", "latitude")) {
-  p <- ggplot(data, aes(x = get(xy_names[[1]]), y = get(xy_names[[2]]))) +
-    geom_polygon(data = ggplot2::map_data("world"), 
-                 aes(long, lat, group = group),
-                 fill = "lightgray", col = "gray") +
-    labs(x = "Longitude", y = "Latitude") +
-    coord_quickmap(xlim = c(-76, -60), ylim = c(35, 50), expand = TRUE) +
-    theme_bw() + 
-    scale_color_viridis() +
-    ggtitle(title)
+                     xy_names = c("lon", "lat")) {
+  xlim <- data[[xy_names[[1]]]] |> range()
+  ylim <- data[[xy_names[[2]]]] |> range()
+  
+  p <- ggplot(data, aes(x = get(xy_names[[1]]), y = get(xy_names[[2]])))
   
   if (log_col) {
-    p + 
+    p <- p + 
       geom_point(aes(col = log(get(plot_col) + 1)), alpha = .7, size = size) + 
       labs(col = paste(plot_col, "(log[x + 1])"))
   } else {
-    p + 
+    p <- p + 
       geom_point(aes(col = get(plot_col)), alpha = .7, size = size) + 
       labs(col = plot_col)
   }
+  
+  p + 
+    geom_polygon(data = ggplot2::map_data("world"), 
+               aes(long, lat, group = group),
+               fill = "lightgray", col = "gray") +
+    labs(x = "Longitude", y = "Latitude") +
+    coord_quickmap(xlim = xlim, ylim = ylim, expand = TRUE) +
+    theme_bw() + 
+    scale_color_viridis() +
+    ggtitle(title)
 }
 
 # Returns a named list of variable abbreviations for Copernicus
@@ -127,6 +173,7 @@ var_abb <- function() {
        zos = "Sea surface height")
 }
 
+#' NO LONGER IN USE - TO REMOVE
 #' Uses breadth-first search to replace incorrectly NA-matched indices with 
 #' a neighboring non-NA value for column of interest
 #' Notes: Assumes that any and all .match_cols values in main_df are also in matching_df

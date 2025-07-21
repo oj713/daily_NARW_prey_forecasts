@@ -6,13 +6,12 @@ dates <- seq(as.Date("2015/4/15"), by = "day", length.out = 70)
 # every other day!
 dates <- dates[seq(1,length(dates),2)]
 
-dates_static <- as.Date(c("2015/12/20", "2015/3/20", "2015/6/20", "2015/9/20"))
-dates_static2 <- as.Date(c(
+dates <- as.Date(c(
   "2014/12/20", "2015/1/20", "2015/2/20", "2015/3/20", "2015/4/20",
   "2015/5/20", "2015/6/20", "2015/7/20", "2015/8/20",
-  "2015/9/20", "2015/10/20", "2015/11/20"
+  "2015/9/20", "2015/10/20", "2015/11/20", "2015/3/15"
 ))
-fix_date <- as.Date(c("2015/3/15"))
+dates <- as.Date(c("2015/3/15"))
 
 workflow_list <- NULL
 
@@ -24,8 +23,9 @@ generate_base_cube <- function(dates) {
   coper_path_phys <- copernicus_path("chfc/GLOBAL_MULTIYEAR_PHY_001_030")
   coper_phys <- coper_path_phys |> read_database() |>
     filter(date %in% dates) |>
-    read_andreas(coper_path_phys) 
-  coper_bathy <- read_static(name = "deptho", path = coper_path)
+    read_andreas(coper_path_phys)
+  coper_phys <- correct_andreas(coper_phys, replacement_values = list("mlotst" = 700))
+  coper_bathy <- read_static(name = "deptho", path = coper_path_phys)
   ## Copernicus data - biogeochemical
   coper_path_bgc <- copernicus_path("world/GLOBAL_MULTIYEAR_BGC_001_029")
   coper_bgc <- coper_path_bgc |> read_database() |>
@@ -43,8 +43,7 @@ generate_base_cube <- function(dates) {
   # Changing to predictable tibble format
   # mlotst has incorrect NA values we're replacing with 700 (arbitrary maximum)
   coper_return <- as_tibble(coper_data) |>
-    mutate(vel = sqrt(uo^2 + vo^2),
-           mlotst = replace_na(mlotst, 700)) |>
+    mutate(vel = sqrt(uo^2 + vo^2)) |>
     na.omit() |>
     rename(lat = y, lon = x)
   
