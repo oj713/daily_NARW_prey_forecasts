@@ -1,7 +1,7 @@
 library(raster)
 library(stars)
 
-source("setup.R")
+source("old_setup.R")
 
 # Creates a datafile for July 1st, 2015 env covariates and matches etopo bathymetry
 # Plots etopo bathymetry displacement value based on land-based matching
