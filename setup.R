@@ -11,15 +11,38 @@ suppressPackageStartupMessages(
     library(andreas)
   })
 
-################## Data Retrieval / Save helpers
+#' Sets the species for the remainder of the session. 
+#' Creates a new set of directories if needed.
+#' @param species str, species name
+#' @return root path for rest of session
+set_root <- function(species) {
+  root <- file.path("/mnt/ecocast/projectdata/students/ojohnson/copernicus", species)
+  if (!dir.exists(root)) {
+    user_input <- readline(paste0("Create new directory for ", species, "? (y/n) "))
+    if(user_input != 'y') {
+      stop("Species doesn't exist.")
+    } else {
+      print(paste0("Creating new directory for ", species, "..."))
+      dir.create(root)
+      dir.create(file.path(root, "input_data/eda_plots"), recursive = TRUE)
+      dir.create(file.path(root, "versions"))
+    }
+  }
+  root
+}
 
-#' Saves a plot object to file
+if (!exists("species")) {
+  species <- readline("Need to define 'species' before running setup. Enter species: ")
+}
+root <- set_root(species)
+
+################## DATA RETRIEVAL AND SAVE HELPERS
+
+#' Saves an eda plot object to file
 #' @param plot_obj, obj to save to pdf
 #' @param filename str, name of file excluding .pdf
-#' @param root root folder location
-save_pdf_ecocast <- function(plot_obj, filename, 
-                             root = "/mnt/ecocast/projectdata/students/ojohnson/copernicus/input_data") {
-  pdf(file.path(root, paste0(filename, ".pdf")))
+save_eda_ecocast <- function(plot_obj, filename) {
+  pdf(file.path(root, "input_data", "eda_plots", paste0(filename, ".pdf")))
   print(plot_obj)
   dev.off()
 } 
@@ -28,8 +51,12 @@ save_pdf_ecocast <- function(plot_obj, filename,
 #' @param filename str, filename with extension
 #' @return data frame
 get_input_data <- function(filename) {
-  root <- "/mnt/ecocast/projectdata/students/ojohnson/copernicus/input_data"
-  readr::read_csv(file.path(root, filename), col_types = readr::cols())
+  path <- file.path(root, "input_data", filename)
+  if (!file.exists(path)) {
+    stop(paste("File doesn't exist: ", path))
+  } else {
+    readr::read_csv(path, col_types = readr::cols())
+  }
 }
 
 #' Retrieves a Copernicus meta database & defining information
@@ -40,7 +67,7 @@ get_input_data <- function(filename) {
 get_coper_info <- function(region = c("chfc", "nwa", "world")[[1]], 
                            type = c("phys", "bgc", "static")[[1]]) {
   if (type == "static") {
-    print("Type not yet supported.")
+    print("Type not supported.")
     return(FALSE)
   }
   
@@ -104,7 +131,7 @@ correct_andreas <- function(stars_obj,
   return(stars_obj)
 }
 
-### PREDICTION AND PLOT HELPERS
+####### PREDICTION AND PLOT HELPERS
 
 #' Plots a generic spatial scatterplot of a value
 #' @param data df, data to plot
@@ -161,4 +188,69 @@ var_abb <- function() {
        no3 = "Nitrate", 
        nppv = "Net Primary Productivity")
 }
+
+######## VERSIONING HELPERS
+
+#' Constructs a file path to given version folder
+#' 
+#' @param v model version
+#' @param ... additional path specifiers
+#' @return file path to version folder
+v_path <- function(v = "sp.0.00", ...) {
+  major <- (strsplit(v, '.', fixed = TRUE) |> unlist())[1:2] |>
+    paste(collapse = ".")
+  file.path(root, "versions", major, v, ...)
+}
+
+#' Reads the yaml configuration for the given version
+#' 
+#' @param v the desired version
+#' @return list of configuration values
+read_config <- function(v = "sp.0.00") {
+  yaml::read_yaml(v_path(v = v, paste0(v, ".yaml")))
+}
+
+
+#' Writes the given configuration to file
+#' 
+#' @param config the configuration list
+#' @param overwrite whether to allow overwrite of existing files
+#' @return list of config values
+write_config <- function(config, 
+                         overwrite = FALSE) {
+  v <- config$version
+  path = v_path(v)
+  if (!dir.exists(path)) {
+    print(paste0("Creating directory ", v, "..."))
+    dir.create(file.path(path), recursive = TRUE)
+    dir.create(file.path(path, "model"))
+    dir.create(file.path(path, "preds"))
+  }
+  
+  yaml_file <- file.path(path, paste0(v, ".yaml"))
+  if(overwrite == FALSE && file.exists(yaml_file)) {
+    stop('Configuration already exists:', version)
+  }
+  
+  yaml::write_yaml(config, yaml_file)
+  return(config)
+}
+
+#' Retrieves a list of all current versions available for species with notes
+review_versions <- function() {
+  v_majors <- list.files(file.path(root, "versions"))
+  
+  get_v_minors <- function(v_major) {
+    v_minors <- list.files(file.path(root, "versions", v_major))
+    
+    v_minors |>
+      map(~read_config(.x)$note) |>
+      setNames(v_minors)
+  }
+  
+  v_majors |>
+    map(get_v_minors) |>
+    setNames(v_majors)
+}
+
 
