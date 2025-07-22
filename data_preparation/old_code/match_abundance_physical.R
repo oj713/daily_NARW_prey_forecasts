@@ -1,4 +1,4 @@
-source("setup.R")
+source("old_setup.R")
 library(ecomon)
 
 # Input data preparation. 

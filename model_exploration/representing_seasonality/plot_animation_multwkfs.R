@@ -6,12 +6,12 @@ dates <- seq(as.Date("2015/4/15"), by = "day", length.out = 70)
 # every other day!
 dates <- dates[seq(1,length(dates),2)]
 
-dates_static <- as.Date(c("2015/12/20", "2015/3/20", "2015/6/20", "2015/9/20"))
-dates_static2 <- as.Date(c(
+dates <- as.Date(c(
   "2014/12/20", "2015/1/20", "2015/2/20", "2015/3/20", "2015/4/20",
   "2015/5/20", "2015/6/20", "2015/7/20", "2015/8/20",
-  "2015/9/20", "2015/10/20", "2015/11/20"
+  "2015/9/20", "2015/10/20", "2015/11/20", "2015/3/15"
 ))
+dates <- as.Date(c("2015/3/15"))
 
 workflow_list <- NULL
 
@@ -19,28 +19,44 @@ workflow_list <- NULL
 #' @param dates Date, vector of dates to include
 #' @return tibble of phys, bgc, bathy variables for dates
 generate_base_cube <- function(dates) {
-  ## Copernicus data
-  coper_path <- copernicus_path("chfc/GLOBAL_MULTIYEAR_PHY_001_030")
-  coper_db <- coper_path |> read_database() |>
-    filter(date %in% dates)
-  coper_phys <- read_andreas(coper_db, coper_path) 
-  coper_bathy <- read_static(name = "deptho", path = coper_path)
-  coper_path2 <- copernicus_path("world/GLOBAL_MULTIYEAR_BGC_001_029")
-  coper_db2 <- coper_path2 |> read_database() |>
-    filter(date %in% dates)
-  coper_bgc <- read_andreas(coper_db2, coper_path2)
+  ## Copernicus data - physical & bathymetry
+  coper_path_phys <- copernicus_path("chfc/GLOBAL_MULTIYEAR_PHY_001_030")
+  coper_phys <- coper_path_phys |> read_database() |>
+    filter(date %in% dates) |>
+    read_andreas(coper_path_phys)
+  coper_phys <- correct_andreas(coper_phys, replacement_values = list("mlotst" = 700))
+  coper_bathy <- read_static(name = "deptho", path = coper_path_phys)
+  ## Copernicus data - biogeochemical
+  coper_path_bgc <- copernicus_path("world/GLOBAL_MULTIYEAR_BGC_001_029")
+  coper_bgc <- coper_path_bgc |> read_database() |>
+    filter(date %in% dates) |>
+    read_andreas(coper_path_bgc)
+  # Warping to match physical dataset
   coper_bgc_resampled <- st_warp(coper_bgc, dest = coper_phys, method = "near")
   
+  # Combining
   coper_data <- c(coper_phys, coper_bgc_resampled)
   coper_data$bathy_depth <- coper_bathy
   rm(coper_phys, coper_bgc, coper_bgc_resampled, coper_bathy)
   gc()
   
-  as_tibble(coper_data) |>
+  # Changing to predictable tibble format
+  # mlotst has incorrect NA values we're replacing with 700 (arbitrary maximum)
+  coper_return <- as_tibble(coper_data) |>
+    mutate(vel = sqrt(uo^2 + vo^2)) |>
     na.omit() |>
-    mutate(vel = sqrt(uo^2 + vo^2), 
-           date = as.Date(time)) |>
     rename(lat = y, lon = x)
+  
+  if (length(dates) > 1) {
+    coper_return <- coper_return |>
+      mutate(across(time, as.Date)) |>
+      rename(date = time)
+  } else {
+    coper_return <- coper_return |>
+      mutate(date = dates[[1]], .after = lat)
+  }
+  
+  coper_return
 }
 
 # Must run seasonality_experiments.Rmd for this to work
@@ -65,7 +81,7 @@ seasonality_alterations <- function(coper_data) {
 }  
 
 #### Code to create static image sets across workflows
-coper_data_predictable <- dates_static2 |>
+coper_data_predictable <- fix_date |>
   generate_base_cube() |>
   seasonality_alterations()
 

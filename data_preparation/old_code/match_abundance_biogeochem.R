@@ -1,4 +1,4 @@
-source("setup.R")
+source("old_setup.R")
 
 jelly_phys <- get_input_data("matched_jellyfish_copernicus_physical_chfc.csv.gz") |>
   rename(ind_m2 = coel_m2)

@@ -1,4 +1,4 @@
-source("setup.R")
+source("old_setup.R")
 
 # Matches abundance data to ETOPO bathymetry values saved to file
 jelly_abund <- get_input_data("matched_ecomon_copernicus_physical_chfc.csv.gz")
