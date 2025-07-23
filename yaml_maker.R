@@ -1,5 +1,5 @@
 v_num <- "0.00"
-overwrite <- FALSE
+overwrite <- TRUE
 species <- c("jellyfish", "cfin", "pseudocalanus", "centrophages")[[1]]
 v_name <- paste0(substr(species, 1, 2), ".", v_num)
 
@@ -10,7 +10,7 @@ source("setup.R")
 # training data 
 strata = "patch"
 coper_data_config <- list(vars_static = "bathy_depth", 
-                          vars_phys = c("bottomT", "mlotst", "so", "thetao", "uo", "vo", "zos"),
+                          vars_phys = c("bottomT", "mlotst", "so", "thetao", "vel", "zos"),
                           vars_bgc = c("chl", "no3", "nppv", "o2", "po4", "si"),
                           vars_time = c("day_length", "ddx_day_length"),
                           transform = c("vel = sqrt(uo^2 + vo^2)",

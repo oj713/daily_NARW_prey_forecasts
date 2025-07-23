@@ -5,7 +5,7 @@ library(twinkle)
 # Input data preparation. 
 # Requisite columns: lat, lon, date, ind_m2
 jelly_raw <- ecomon::scale_ecomon() |> 
-  select(c(lon, lat, date, depth, ind_m2 = coel_m2)) |>
+  select(c(lon, lat, date, ind_m2 = coel_m2)) |>
   na.omit()
 
 cfin_raw <- "/mnt/ecocast/projectdata/calanusclimate/src/vertical_correction_ecomon.csv.gz" |>
@@ -108,9 +108,11 @@ match_coper_abundance <- function(abund_data,
                   st_drop_geometry())
   }
   
+  # Reformatting and adding day_of_year variable
   abund_phys_matched |>
     st_drop_geometry() |>
-    rename(lat = olat, lon = olon)
+    rename(lat = olat, lon = olon) |>
+    mutate(day_of_year = lubridate::yday(date), .after = date)
 }
 
 #' Matches abundance records in a dataset to copernicus physical values
@@ -194,7 +196,8 @@ match_abundance_physical <- function(abund_data, region = "chfc") {
   
   abund_phys_matched |>
     st_drop_geometry() |>
-    rename(lat = olat, lon = olon)
+    rename(lat = olat, lon = olon) |>
+    mutate(day_of_year = lubridate::yday(date), .after = date)
 }
 
 jelly_phys <- jelly_raw |>
