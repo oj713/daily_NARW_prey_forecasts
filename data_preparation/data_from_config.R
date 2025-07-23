@@ -51,5 +51,6 @@ data_from_config <- function(config, extra_vars = NULL) {
   
   # Now trim the data to only include the data we want and return
   base_data |> 
-    select(lon, lat, date, ind_m2, all_of(all_variables))
+    mutate(patch = ind_m2 > config$training_data$species_data$threshold$pre) |>
+    select(lon, lat, date, patch, ind_m2, all_of(all_variables))
 }
