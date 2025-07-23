@@ -8,19 +8,16 @@ note <- "Initial jellyfish model. Indifferent to tuning, day length time represe
 source("setup.R")
 
 # training data 
-strata = "patch"
+strata = "patch" # currently unread
 coper_data_config <- list(vars_static = "bathy_depth", 
                           vars_phys = c("bottomT", "mlotst", "so", "thetao", "vel", "zos"),
                           vars_bgc = c("chl", "no3", "nppv", "o2", "po4", "si"),
-                          vars_time = c("day_length", "ddx_day_length"),
-                          transform = c("vel = sqrt(uo^2 + vo^2)",
-                                        "bathy_depth = log10(bathy_depth + 1)",
-                                        "step_normalize()"))
-species_data_config <- list(source = "ecomon", 
-                            data_columns = c("coel_m2"),
-                            vertically_corrected = FALSE, 
+                          vars_time = c("day_length", "ddx_day_length"))
+species_data_config <- list(source = "ecomon", # currently unread
+                            data_columns = c("coel_m2"), # currently unread
+                            vertically_corrected = FALSE, # currently unread
                             threshold = list(pre = 0,
-                                             post = NULL))
+                                             post = NULL)) # currently unread
 # model
 seed <- 799
 
@@ -32,7 +29,7 @@ brt <- list(name = "Boosted Regression Tree",
             mtry = 5,
             min_n = 10)
 
-model_types <- list(brt) 
+transformations <- c("step_log_bathy", "step_normalize_numeric")
 
 ### ASSEMBLY #############################################
 
@@ -41,7 +38,8 @@ training_data_config <- list(species = species,
                              coper_data = coper_data_config)
 
 model_config <- list(seed = seed,
-                     model_list = model_types)
+                     model = brt, 
+                     transformations = transformations)
 
 config <- list(version = v_name, 
                note = note,
