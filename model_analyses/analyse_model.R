@@ -79,11 +79,11 @@ threshold_vs_performance <- function(v, testing, save = TRUE) {
 #' @param same_y bool, same y scale for all covariates
 #' @param save bool, save to file?
 #' @return response curves separated by month and variable ordered by imp
-response_curves_data <- function(v, 
-                                 v_wkfs,
-                                 vdata,
-                                 same_y = FALSE, 
-                                 save = TRUE) {
+response_curves <- function(v, 
+                            v_wkfs,
+                            vdata,
+                            same_y = FALSE, 
+                            save = TRUE) {
   # Extracting variables to process from workflows
   role_table <- v_wkfs[[1]] |> extract_preprocessor() |> summary()
   vars <- filter(role_table, role == "predictor")$variable
@@ -158,7 +158,7 @@ response_curves_data <- function(v,
   ### Variable importance
   vimp <- (wkfs[[1]] |>
              extract_fit_parsnip() |>
-             vi_model())$Variable
+             vip::vi_model())$Variable
   if (has_month) {
     vimp <- gsub("month[^ ]*", "month", vimp) |>
       unique()
@@ -188,7 +188,7 @@ response_curves_data <- function(v,
     theme_bw() +
     labs(x = "Covariate value", 
          y = "Predicted Probability") +
-    ggtitle(paste(v, "response curves"))
+    ggtitle(paste(v, "Response Curves"))
   
   savename <- paste0("response_curves", 
                      ifelse(same_y, "_fixedY", ""))
