@@ -1,5 +1,3 @@
-library(bundle) # for saving MLP model types
-
 ##### Custom recipe steps to add to workflow, specified in yaml configuration
 
 #' Logs bathymetry

@@ -20,5 +20,5 @@ K = 5 # 100 for any scale model
 mec_folds <- mec |>
   mc_cv(prop = .75, times = K, strata = patch)
 
-# Creating workflow object & initial analyses
+# Creating workflow object & performance summary
 mec_wkfs <- init_v_wkf(config, mec_folds)

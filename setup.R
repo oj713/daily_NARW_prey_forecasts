@@ -7,8 +7,9 @@ suppressPackageStartupMessages(
     library(sf)
     library(lubridate)
     library(viridis)
-    library(copernicus)
+    library(copernicus) # Copernicus retrieval
     library(andreas)
+    library(bundle) # for saving MLP model types
   })
 
 #' Sets the species for the remainder of the session. 
@@ -200,6 +201,30 @@ v_path <- function(v = "sp.0.00", ...) {
   major <- (strsplit(v, '.', fixed = TRUE) |> unlist())[1:2] |>
     paste(collapse = ".")
   file.path(root, "versions", major, v, ...)
+}
+
+#' Retrieves a model version from file
+#' @param v str, model version
+#' @return workflow set
+get_v_wkfs <- function(v = "sp.0.00") {
+  model_obj <- readRDS(v_path(v, "model", "model_fits.csv.gz"))
+  
+  if (any(class(model_obj) == "bundle")) {
+    model_obj <- unbundle(model_obj)
+  }
+  
+  model_obj
+}
+
+#' Retrieves testing data for a model version
+#' @param v str, model version
+#' @return df, augmented testing results over all folds
+get_v_testing <- function(v = "sp.0.00") {
+  data <- v_path(v, "model", "testing_results.csv.gz") |>
+    readr::read_csv(col_types = readr::cols()) 
+  
+  mutate(data, across(c("patch", ".pred_class"),
+                      ~factor(.x, levels = c("1", "0"))))
 }
 
 #' Reads the yaml configuration for the given version
