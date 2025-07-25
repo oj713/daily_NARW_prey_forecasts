@@ -41,7 +41,6 @@ generate_base_cube <- function(dates) {
   gc()
   
   # Changing to predictable tibble format
-  # mlotst has incorrect NA values we're replacing with 700 (arbitrary maximum)
   coper_return <- as_tibble(coper_data) |>
     mutate(vel = sqrt(uo^2 + vo^2)) |>
     na.omit() |>
