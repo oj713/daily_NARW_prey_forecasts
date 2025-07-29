@@ -1,15 +1,5 @@
-species <- "jellyfish"
-source("setup.R")
 source("data_preparation/derive_calculated_variables.R")
 library(pbapply)
-
-v <- "je.0.00"
-wkfs <- get_v_wkfs(v)
-
-dates <- seq(as.Date("2015/4/15"), by = "day", length.out = 12)
-dates_nested <- 
-  list("winter" = as.Date(c("2014/11/20", "2014/12/20", "2015/1/20", "2015/2/20", "2015/3/20")),
-       "summer" = as.Date(c("2014/5/20", "2015/6/20", "2015/7/20", "2015/8/20", "2015/09/20")))
 
 #' Calculates quantile predictions for a set of workflows and a dataset
 #' Leaves any NA rows in the dataset as is
@@ -200,5 +190,34 @@ generate_prediction_cubes <- function(v, dates,
   }
 }
 
-generate_prediction_cubes(v, dates_nested, save_folder = "test_chunking1", verbose = TRUE, max_chunk_size = 3)
-
+#' Generates data cubes for a version at yearly resolution
+#' Wrapper for generate_prediction_cubes
+#' 
+#' @param v str, version
+#' @param date_start Date, start date
+#' @param date_end Date, end date
+#' @param verbose bool, print progress?
+#' @return path to save folder
+generate_yearly_cubes <- function(v, 
+                                  date_start, 
+                                  date_end,
+                                  verbose = TRUE) {
+  
+  # Create partitioned date vector
+  all_dates <- seq(date_start, date_end, by = "days")
+  dates_chunks <- split(all_dates, lubridate::year(all_dates))
+  
+  # Create main folder filename
+  main_folder <- sprintf("%s_to_%s", 
+                         format(date_start, "%m_%d_%Y"), 
+                         format(date_end, "%m_%d_%Y"))
+  
+  res <- generate_prediction_cubes(v, dates_chunks, save_folder = main_folder, 
+                                   verbose = TRUE, max_chunk_size = 92)
+  
+  if (!all(res)) {
+    stop("Something went wrong.")
+  } else {
+    return(v_path(v, "preds", main_folder))
+  }
+}
