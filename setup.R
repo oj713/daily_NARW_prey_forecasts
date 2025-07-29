@@ -1,15 +1,15 @@
 suppressPackageStartupMessages(
   {
     library(stars) # spatial data
-    library(ncdf4) # querying data 
-    library(tidymodels)
-    library(purrr)
     library(sf)
+    library(tidymodels) # Modeling
+    library(purrr) # Better data handling
     library(lubridate)
-    library(viridis)
+    library(viridis) # Improve plots
     library(copernicus) # Copernicus retrieval
     library(andreas)
-    library(bundle) # for saving MLP model types
+    library(bundle) # for saving neural network model types (not that we have any atm)
+    library(pbapply) # for faster quantile processing
   })
 
 #' Sets the species for the remainder of the session. 

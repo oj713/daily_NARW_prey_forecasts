@@ -1,5 +1,4 @@
 source("data_preparation/derive_calculated_variables.R")
-library(pbapply)
 
 #' Calculates quantile predictions for a set of workflows and a dataset
 #' Leaves any NA rows in the dataset as is
