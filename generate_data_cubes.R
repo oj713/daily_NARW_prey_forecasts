@@ -103,8 +103,8 @@ generate_prediction_cubes <- function(v, dates,
       # Physical copernicus data - must replace incorrect NAs in mlotst
       coper_phys <- ci_phys |>
         get_coper_stars(dates_chunk) |>
-        correct_andreas(replacement_values = list("mlotst" = 700, 
-                                                  "vo" = 0))
+        correct_andreas(diagnose = verbose)
+      
       # BGC copernicus data - must warp to match physical data
       coper_bgc <- ci_bgc |>
         get_coper_stars(dates_chunk) |>
@@ -204,14 +204,14 @@ generate_yearly_cubes <- function(v,
   
   # Create partitioned date vector
   all_dates <- seq(date_start, date_end, by = "days")
-  dates_chunks <- split(all_dates, lubridate::year(all_dates))
+  dates_years <- split(all_dates, lubridate::year(all_dates))
   
   # Create main folder filename
   main_folder <- sprintf("%s_to_%s", 
                          format(date_start, "%m_%d_%Y"), 
                          format(date_end, "%m_%d_%Y"))
   
-  res <- generate_prediction_cubes(v, dates_chunks, save_folder = main_folder, 
+  res <- generate_prediction_cubes(v, dates_years, save_folder = main_folder, 
                                    verbose = TRUE, max_chunk_size = 92)
   
   if (!all(res)) {

@@ -6,6 +6,7 @@ v <- "je.0.00"
 
 date_start = as.Date("1993-01-01")
 date_end = as.Date("2025-02-28")
+date_end = as.Date("1993-12-31")
 
 generate_yearly_cubes(v, 
                       date_start, 

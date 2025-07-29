@@ -22,6 +22,13 @@ get_velocity <- function(uo, vo) {
   sqrt(uo^2 + vo^2)
 }
 
+get_bathymetric_slope <- function() {
+  ci_phys <- get_coper_info(region = "chfc", type = "phys")
+  coper_bathy <- read_static(name = "deptho", path = ci_phys$coper_path) |>
+    st_transform(crs = 6933) # equal area
+  slope(coper_bathy)
+}
+
 #### WRAPPERS -- take entire dataset as input rather than individual columns
 
 get_day_length_data <- function(data) {
