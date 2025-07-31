@@ -1,17 +1,19 @@
 source("data_preparation/derive_calculated_variables.R")
 
 #' Calculates quantile predictions for a set of workflows and a dataset
+#' Calculates mean, median, max, min as appropriate if num folds ≤ 3
 #' Leaves any NA rows in the dataset as is
 #' @param wkfs workflow set
 #' @param data df, data to predict on
 #' @param desired_quants numeric, list of percentiles to return
+#'  This param is ignored if num folds ≤ 3
 #' @param verbose bool, print progress? 
 #' @return df, quantile results with id columns lon, lat, date
 apply_quantile_preds <- function(wkfs, data, desired_quants, verbose = FALSE) {
   n_folds <- length(wkfs)
   predictable_indices <- complete.cases(data)
   
-  if(verbose) {cat("\n Predicting... 0 / 5")}
+  if(verbose) {cat("\n Predicting... 0 /", n_folds)}
   
   # Calculates predictions from a single workflow
   get_wkf_column <- function(wkf, idx) {
@@ -30,21 +32,30 @@ apply_quantile_preds <- function(wkfs, data, desired_quants, verbose = FALSE) {
     suppressMessages()
   
   if(verbose) {cat("\r Calculating quantiles...")}
-  # pbapply::pbapply() is an improvement to the base apply() function
-  # it shows a progress bar and is about 10% faster for quantile()
-  pbapply::pboptions(type = ifelse(verbose, "timer", "none"))
-  pred_quantiles <- pbapply(pred_quantiles, 1, 
-                          function(x) quantile(x, probs = desired_quants))
-  
-  if(verbose) {cat("\r Formatting to return...")}
-  pred_quantiles <- (if (length(desired_quants) > 1) {
-    pred_quantiles |>
+  # Different calculation methods for high fold versus fold count ≤ 3
+  if (n_folds >= 3) {
+    # Calculate quantiles (n_folds ≥ 4) OR sort to min/middle/max (n_folds = 3)
+    if (n_folds == 3) {desired_quants <- c(0, .5, 1)}
+    function_to_apply <- ifelse(n_folds == 3, sort, function(x) quantile(x, probs = desired_quants))
+    
+    # pbapply::pbapply() is an improvement to the base apply() function
+    # it shows a progress bar and is about 10% faster for quantile()
+    pbapply::pboptions(type = ifelse(verbose, "timer", "none"))
+    pred_quantiles <- pbapply(pred_quantiles, 1, function_to_apply) |>
       t() |>
       as_tibble(.name_repair = "unique")
-  } else {
-    pred_quantiles |>
-      as_tibble_col(paste0(desired_quants * 100, "%"))
-  })
+    
+  } else if (n_folds <= 2) {
+    # Mean (n_folds = 2) OR identity (n_folds = 1)
+    desired_quants <- c(.5)
+    if (n_folds == 2) {
+      pred_quantiles <- rowMeans(pred_quantiles) |>
+      as_tibble_col()
+    }
+  }
+  
+  if(verbose) {cat("\r Formatting to return...")}
+  colnames(pred_quantiles) <- paste0(desired_quants * 100, "%")
   
   # Adding back empty entries for NA values
   returnable_data <- data |>
