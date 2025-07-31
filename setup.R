@@ -39,6 +39,32 @@ root <- set_root(species)
 
 ################## DATA RETRIEVAL AND SAVE HELPERS
 
+#' Creates a string based on date start and date end
+#' @param date_range, Dates, list of date_start and date_end
+#' @param ... str, other characters
+#' @return str in format date_start_to_date_end_extra_args
+date_range_to_string <- function(date_range, ...) {
+  paste(c(format(date_range[[1]], "%m_%d_%Y"),
+        "to", 
+        format(date_range[[2]], "%m_%d_%Y"), 
+        ...),
+        collapse = "_")
+}
+
+#' Retrieves a date range from a string from date_to_date
+#' @param date_string, str with embedded date range
+#' @return Dates, list of date_start and date_end
+string_to_date_range <- function(date_string) {
+  match <- regmatches(date_string, 
+                      regexpr("\\d{2}_\\d{2}_\\d{4}_to_\\d{2}_\\d{2}_\\d{4}", date_string))
+  
+  if (length(match) == 0) {stop("No date range detected in input string:", date_string)}
+  
+  unlist(strsplit(match, "_to_")) |>
+    map(~as.Date(.x, format = "%m_%d_%Y")) |> 
+    setNames(c("date_start", "date_end"))
+}
+
 #' Saves an eda plot object to file
 #' @param plot_obj, obj to save to pdf
 #' @param filename str, name of file excluding .pdf
@@ -90,11 +116,6 @@ get_coper_info <- function(region = c("chfc", "nwa", "world")[[1]],
        bbox = bbox,
        meta_db = coper_DB)
 }
-
-# Script to diagnose appropriate replacements 
-ci_phys <- coper_info("chfc", "phys")
-stars_coper <- filter(ci_phys$meta_db, date %in% dates_chunks[[2]]) |>
-  read_andreas(ci_phys$coper_path)
 
 #' Corrects stars objects with incorrect missing values. Intended for use with Copernicus.
 #' Assumes that the stars object uses NA to both indicate masked values, i.e. land, and missing values.
@@ -234,12 +255,15 @@ var_abb <- function() {
 #' Constructs a file path to given version folder
 #' 
 #' @param v model version
-#' @param ... additional path specifiers
+#' @param ... additional path specifiers, ignoring NULL entries
 #' @return file path to version folder
 v_path <- function(v = "sp.0.00", ...) {
   major <- (strsplit(v, '.', fixed = TRUE) |> unlist())[1:2] |>
     paste(collapse = ".")
-  file.path(root, "versions", major, v, ...)
+  
+  extras <- Filter(Negate(is.null), list(...))
+  
+  do.call(file.path, c(root, "versions", major, v, extras))
 }
 
 #' Retrieves a model version from file
