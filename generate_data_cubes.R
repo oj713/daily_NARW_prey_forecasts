@@ -9,7 +9,9 @@ source("data_preparation/derive_calculated_variables.R")
 #'  This param is ignored if num folds ≤ 3
 #' @param verbose bool, print progress? 
 #' @return df, quantile results with id columns lon, lat, date
-apply_quantile_preds <- function(wkfs, data, desired_quants, verbose = FALSE) {
+apply_quantile_preds <- function(wkfs, data, 
+                                 desired_quants = c(0, .05, .5, .95, 1), 
+                                 verbose = FALSE) {
   n_folds <- length(wkfs)
   predictable_indices <- complete.cases(data)
   
@@ -43,7 +45,7 @@ apply_quantile_preds <- function(wkfs, data, desired_quants, verbose = FALSE) {
     pbapply::pboptions(type = ifelse(verbose, "timer", "none"))
     pred_quantiles <- pbapply(pred_quantiles, 1, function_to_apply) |>
       t() |>
-      as_tibble(.name_repair = "unique")
+      as_tibble(.name_repair = "unique_quiet")
     
   } else if (n_folds <= 2) {
     # Mean (n_folds = 2) OR identity (n_folds = 1)
@@ -69,9 +71,11 @@ apply_quantile_preds <- function(wkfs, data, desired_quants, verbose = FALSE) {
 #' Saves a quantile stars object to file if desired
 #' @param quantile_stars stars object with quantile attributes: 5%, 50%, etc
 #' @param save_path str, path to folder OR NULL for no save
-#' @param filename_prefix str, prefix for file
+#' @param filename_prefix str, prefix for file. Ignored if no save
 #' @return TRUE if saved successfully, input if no save
-save_quantile_stars <- function(quantile_stars, save_path, filename_prefix) {
+write_quantile_stars <- function(quantile_stars, 
+                                 save_path = NULL, filename_prefix = NULL) {
+  
   if(is.null(save_path)) {return(quantile_stars)}
   
   # Helper, saves a single layer
@@ -86,6 +90,26 @@ save_quantile_stars <- function(quantile_stars, save_path, filename_prefix) {
   TRUE
 }
 
+#' Reads quantile stars object.s from file
+#' @param folder_path str, file path to folder with saved quantile stars
+#' @return list of quantile_stars objects read in from file
+read_quantile_stars <- function(folder_path) {
+  # Reads in files and splits up by individual stars object
+  if (!dir.exists(folder_path)) {stop("Folder does not exist.")}
+  files <- list.files(folder_path, pattern = "*.tif")
+  files_groups <- split(files, sub("_\\d+.tif", "", files))
+  
+  #' Helper: reads in all stars objects and collapses into one
+  read_quantile_star <- function(file_list) {
+    file.path(folder_path, file_list) |>
+      read_stars() # lowkey broken...
+  }
+  
+  files_groups |>
+    map(read_quantile_star)
+}
+  
+
 # One layer of the biogeochemical coper stars is 47 MB
 # One layer of the physical coper stars is 6 MB
 # The amount of memory needed to process one date is approximately 130 MB
@@ -97,19 +121,33 @@ save_quantile_stars <- function(quantile_stars, save_path, filename_prefix) {
 #' @param verbose bool, print progression?
 #' @param max_chunk_size int, maximum number of dates to process at a time
 #' @param desired_quants numeric, quantile percentages to calculate
+#' @param fold_number int, if not NULL subset workflows to reduce calculation time
+#' @param recovery bool, adding to existing material saved to file? 
+#'  If FALSE, only unused save_folder names are allowed
 #' @return either prediction stars object or list of subfolders with success booleans
 generate_prediction_cubes <- function(v, dates, 
                                       save_folder = NULL, 
                                       verbose = TRUE, 
                                       max_chunk_size = 92, 
-                                      desired_quants = c(0, .05, .25, .5, .75, .95, 1)) {
+                                      desired_quants = c(0, .05, .25, .5, .75, .95, 1),
+                                      fold_number = NULL,
+                                      recovery = FALSE) {
   # Force save if dates size is too large
   if (length(unlist(dates)) > max_chunk_size & is.null(save_folder)) {
-    stop("Must save to file for dates selection larger than max chunk size")
+    stop("Must save to file for dates selection larger than max chunk size.")
+  }
+  if (recovery) {stop("Recovery mode not yet supported.")}
+  if (!recovery && !is.null(save_folder) && 
+      dir.exists(v_path(v, "preds", save_folder))) {
+    stop("Unless RECOVERY is on, must specify new save folder.")
   }
   
   config <- read_config(v)
   v_wkfs <- get_v_wkfs(v)
+  # Subset workflows if desired
+  if (!is.null(fold_number) && fold_number < length(v_wkfs)) {
+    v_wkfs <- v_wkfs[1:fold_number]
+  }
   ci_phys <- get_coper_info("chfc", "phys")
   ci_bgc <- get_coper_info("world", "bgc")
   
@@ -132,11 +170,25 @@ generate_prediction_cubes <- function(v, dates,
                       ifelse(is.null(save_subfolder), "all", save_subfolder),
                       "( n =", length(dates_vec), ")")}
     
-    # Creating save path
     save_path <- NULL
+    recovered_chunks <- NULL
+    # Are we saving to file??
     if (!is.null(save_folder)) {
       save_path <- v_path(v, "preds", save_folder, save_subfolder)
-      if (!dir.exists(save_path)) {dir.create(save_path, recursive = TRUE)}
+      # Does the partition folder already exist? 
+      if (dir.exists(save_path)) {
+        tmp_path <- file.path(save_path, "tmp_chunks")
+        # Either initiating recovery mode OR skipping a previously-completed folder
+        if (dir.exists(tmp_path)) {
+          recovered_chunks <- read_quantile_stars(tmp_path)
+          cat("\n Recovering partition...", length(recovered_chunks), "retrieved.")
+        } else {
+          cat("\n Partition already exists. Skipping...")
+          return(TRUE)
+        }
+      } else {
+        dir.create(save_path, recursive = TRUE)
+      }
     }
     
     #' Helper: Processes a date chunk and returns stars object
@@ -165,11 +217,11 @@ generate_prediction_cubes <- function(v, dates,
       
       # Converting to tibble, and adding calculated variables
       coper_data <- as_tibble(coper_data)
-      coper_data <- (if(length(dates_vec) > 1) {
+      coper_data <- (if(length(dates_chunk) > 1) {
         mutate(coper_data, date = as.Date(time)) |>
           select(-time)
       } else {
-        mutate(coper_data, date = dates_vec, .after = y)
+        mutate(coper_data, date = dates_chunk, .after = y)
       })
       coper_data <- coper_data |>
         rename(lon = x, lat = y) |>
@@ -187,7 +239,7 @@ generate_prediction_cubes <- function(v, dates,
         st_as_stars(dims = c("lon", "lat", "date"))
       
       # Saving to file if chunk_dir specified and returning 
-      save_quantile_stars(coper_chunk, save_path = chunk_dir, 
+      write_quantile_stars(coper_chunk, save_path = chunk_dir, 
           filename_prefix = date_range_to_string(range(dates_chunk), "CHUNK"))
       
       coper_chunk
@@ -226,6 +278,7 @@ generate_prediction_cubes <- function(v, dates,
         
         message("Something went wrong while processing partition. \n
                 Error: ", e, "\n", 
+                "Partition name: ", ifelse(is.null(save_subfolder), "all", save_subfolder), "\n",
                 "Saved chunks: ", length(chunk_files)/length(desired_quants), "\n",
                 "Saved date range: ", paste(range(saved_dates), collapse = " to "), "\n",
                 "Returning recovery information...")
@@ -233,15 +286,18 @@ generate_prediction_cubes <- function(v, dates,
         # Returning information necessary for recovery
         recovery_info <- list(
           error = e,
-          chunk_dir = chunk_dir, 
+          v = v, 
+          save_folder = save_folder, 
+          save_subfolder = save_subfolder,
           saved_dates = saved_dates,
-          unsaved_dates = dates_vec[!(dates_vec %in% saved_dates)]
+          failed_chunk = dates_chunk,
+          partition_dates = dates_vec
         )
         
         return (recovery_info)
       })
       
-      if (!identical(recovery, "success")) {
+      if (recovery != 0) {
         cat("\n Partition error. Returning recovery information. \n")
         return(recovery)
       }
@@ -249,7 +305,7 @@ generate_prediction_cubes <- function(v, dates,
   
     # Save and return stars object
     cat("\n Partition Done! \n")
-    save_quantile_stars(
+    write_quantile_stars(
       coper_preds,
       save_path = save_path, 
       filename_prefix = paste(c(species, save_folder, save_subfolder), collapse = "_")
@@ -262,6 +318,24 @@ generate_prediction_cubes <- function(v, dates,
     dates |>
       imap(generate_prediction_cube)
   }
+}
+
+#' Performs partition recovery given a res result object:
+#   error = e,
+#   v = v, 
+#   save_folder = save_folder, 
+#   save_subfolder = save_subfolder,
+#   saved_dates = saved_dates,
+#   unsaved_dates = dates_vec[!(dates_vec %in% saved_dates)]
+#' 
+#' i.e. recalculates remaining chunks, binds to remainders in tmp_chunks, and saves
+#' @param res list, list of success codes and recovery objects
+#' @return TRUE if all successful
+partition_recovery <- function(res) {
+  # flatten to just TRUE, FALSE, and recovery objects
+  if (purrr::pluck_depth(res) > 3) {res <- unlist(res, recursive = FALSE)}
+  
+  
 }
 
 #' Generates data cubes for a version at yearly resolution
@@ -287,8 +361,9 @@ generate_yearly_cubes <- function(v,
   res <- generate_prediction_cubes(v, dates_years, save_folder = main_folder, 
                                    verbose = TRUE, max_chunk_size = 92)
   
-  if (!all(res)) {
-    return(res)
+  # Are all entries a TRUE?? 
+  if (!all(unlist(res) |> vapply(isTRUE, logical(1)))) {
+    return(res) # return results if not
   } else {
     if(verbose) {cat("Success!")}
     return(v_path(v, "preds", main_folder))
