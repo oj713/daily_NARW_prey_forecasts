@@ -136,7 +136,6 @@ read_quantile_stars <- function(folder_path) {
 
   quantile_stars
 }
-  
 
 # One layer of the biogeochemical coper stars is 47 MB
 # One layer of the physical coper stars is 6 MB
@@ -150,7 +149,7 @@ read_quantile_stars <- function(folder_path) {
 #' @param max_chunk_size int, maximum number of dates to process at a time
 #' @param desired_quants numeric, quantile percentages to calculate
 #' @param fold_number int, if not NULL subset workflows to reduce calculation time
-#' @param recovery bool, adding to existing material saved to file? 
+#' @param add bool, adding to existing material saved to file? 
 #'  If FALSE, only unused save_folder names are allowed
 #' @return either prediction stars object or list of subfolders with success booleans
 generate_prediction_cubes <- function(v, dates, 
@@ -159,15 +158,13 @@ generate_prediction_cubes <- function(v, dates,
                                       max_chunk_size = 92, 
                                       desired_quants = c(0, .05, .25, .5, .75, .95, 1),
                                       fold_number = NULL,
-                                      recovery = FALSE) {
+                                      add = FALSE) {
   # Force save if dates size is too large
   if (length(unlist(dates)) > max_chunk_size & is.null(save_folder)) {
     stop("Must save to file for dates selection larger than max chunk size.")
   }
-  if (recovery) {stop("Recovery mode not yet supported.")}
-  if (!recovery && !is.null(save_folder) && 
-      dir.exists(v_path(v, "preds", save_folder))) {
-    stop("Unless RECOVERY is on, must specify new save folder.")
+  if (!add && !is.null(save_folder) && dir.exists(v_path(v, "preds", save_folder))) {
+    stop("Unless 'add' is TRUE, must specify new save folder.")
   }
   
   config <- read_config(v)
@@ -200,6 +197,7 @@ generate_prediction_cubes <- function(v, dates,
     
     save_path <- NULL
     recovered_chunks <- NULL
+    dates_to_calculate <- dates_vec
     # Are we saving to file??
     if (!is.null(save_folder)) {
       save_path <- v_path(v, "preds", save_folder, save_subfolder)
@@ -209,7 +207,10 @@ generate_prediction_cubes <- function(v, dates,
         # Either initiating recovery mode OR skipping a previously-completed folder
         if (dir.exists(tmp_path)) {
           recovered_chunks <- read_quantile_stars(tmp_path)
-          cat("\n Recovering partition...", length(recovered_chunks), "retrieved.")
+          recovered_dates <- recovered_chunks |>
+            map(st_get_dimension_values, which = "date") |> unlist() |> as.Date()
+          dates_to_calculate <- dates_vec[!(dates_vec %in% recovered_dates)]
+          cat("\n Recovering partition...", length(recovered_chunks), "chunks retrieved.")
         } else {
           cat("\n Partition already exists. Skipping...")
           return(TRUE)
@@ -278,10 +279,11 @@ generate_prediction_cubes <- function(v, dates,
     chunk_dir <- NULL
     if (length(dates_vec) <= max_chunk_size) {
       # Case 1: we can just process everything in one go
-      coper_preds <- generate_prediction_chunk(dates_vec, chunk_dir)
+      coper_preds <- generate_prediction_chunk(dates_to_calculate, chunk_dir)
     } else { 
       # Case 2: we have to chunk the data and save backups in case something goes wrong
-      dates_chunks <- split(dates_vec, ceiling(seq_along(dates_vec)/max_chunk_size))
+      dates_chunks <- split(dates_to_calculate, 
+                            ceiling(seq_along(dates_to_calculate)/max_chunk_size))
       if (!is.null(save_folder)) {
         chunk_dir <- file.path(save_path, "tmp_chunks")
         if (!dir.exists(chunk_dir)) {dir.create(chunk_dir)}
@@ -292,6 +294,7 @@ generate_prediction_cubes <- function(v, dates,
         # Map through and retrieve all chunks, saving intermediary chunks to file
         coper_preds <- dates_chunks |>
           map(~generate_prediction_chunk(.x, chunk_dir))
+        coper_preds <- c(recovered_chunks, coper_preds) # adding back recovered chunks
         
         coper_preds <- Reduce(function(a, b) c(a, b, along = 3), coper_preds) |>
           st_set_dimensions("date", values = dates_vec)
@@ -348,24 +351,6 @@ generate_prediction_cubes <- function(v, dates,
   }
 }
 
-#' Performs partition recovery given a res result object:
-#   error = e,
-#   v = v, 
-#   save_folder = save_folder, 
-#   save_subfolder = save_subfolder,
-#   saved_dates = saved_dates,
-#   unsaved_dates = dates_vec[!(dates_vec %in% saved_dates)]
-#' 
-#' i.e. recalculates remaining chunks, binds to remainders in tmp_chunks, and saves
-#' @param res list, list of success codes and recovery objects
-#' @return TRUE if all successful
-partition_recovery <- function(res) {
-  # flatten to just TRUE, FALSE, and recovery objects
-  if (purrr::pluck_depth(res) > 3) {res <- unlist(res, recursive = FALSE)}
-  
-  
-}
-
 #' Generates data cubes for a version at yearly resolution
 #' Wrapper for generate_prediction_cubes
 #' 
@@ -376,7 +361,7 @@ partition_recovery <- function(res) {
 #' @param verbose bool, print progress?
 #' @param fold_number int, if not NULL subset workflows to reduce calculation time
 #' @param date_downsample int, downsample dates vector integer value or NULL
-#' @param recovery bool, adding to existing material saved to file? 
+#' @param add bool, adding to existing material saved to file? 
 #' @return path to save folder
 generate_yearly_cubes <- function(v, 
                                   date_start, 
@@ -385,7 +370,7 @@ generate_yearly_cubes <- function(v,
                                   verbose = TRUE, 
                                   fold_number = NULL,
                                   date_downsample = NULL,
-                                  recovery = FALSE) {
+                                  add = FALSE) {
   
   # Create partitioned date vector
   all_dates <- seq(date_start, date_end, by = "days")
@@ -394,7 +379,7 @@ generate_yearly_cubes <- function(v,
   }
   dates_years <- split(all_dates, lubridate::year(all_dates))
   
-  # Create main folder filename
+  # Create main folder filename if no override provided
   if (is.null(main_folder)) {
     main_folder <- paste0(
       ifelse(is.null(date_downsample), "daily_resolution", 
@@ -409,7 +394,7 @@ generate_yearly_cubes <- function(v,
                                    verbose = verbose, 
                                    max_chunk_size = 92, 
                                    fold_number = fold_number,
-                                   recovery = recovery)
+                                   add = add)
   
   # Are all entries a TRUE?? 
   if (!all(unlist(res) |> vapply(isTRUE, logical(1)))) {

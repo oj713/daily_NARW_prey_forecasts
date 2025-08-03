@@ -23,12 +23,15 @@ dates_testing <- list("winter" = as.Date(c("2014/11/20", "2014/12/20", "2015/1/2
 dates_deliberatechunkbreak <- 
   list("summer" = as.Date(c("2014/5/20", "2015/6/20", "2015/7/20", "2015/8/20", "2015/9/20", "2035/10/20")),
        "winter" = as.Date(c("2014/11/20", "2014/12/20", "2015/1/20", "2015/2/20", "2015/3/20")))
+dates_fix_chunk_break <- 
+  list("summer" = as.Date(c("2014/5/20", "2015/6/20", "2015/7/20", "2015/8/20", "2015/9/20", "2015/10/20")),
+       "winter" = as.Date(c("2014/11/20", "2014/12/20", "2015/1/20", "2015/2/20", "2015/3/20")))
 
 res <- generate_prediction_cubes(v, 
-                                 dates_testing, 
-                                 save_folder = "test_foldreduction", 
+                                 dates_fix_chunk_break, 
+                                 save_folder = "test_recovery_mode", 
                                  verbose = TRUE, 
                                  max_chunk_size = 2,
-                                 fold_number = 3,
-                                 recovery = FALSE)
+                                 fold_number = 3, 
+                                 add = TRUE)
 }
