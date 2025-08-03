@@ -71,6 +71,7 @@ apply_quantile_preds <- function(wkfs, data,
 }
 
 #' Saves a quantile stars object to file if desired
+#' Saves each layer individually, plus a dimensions object
 #' @param quantile_stars stars object with quantile attributes: 5%, 50%, etc
 #' @param save_path str, path to folder OR NULL for no save
 #' @param filename_prefix str, prefix for file. Ignored if no save
@@ -89,31 +90,50 @@ write_quantile_stars <- function(quantile_stars,
   names(quantile_stars) |>
     iwalk(save_layer)
   
+  st_dimensions(quantile_stars) |>
+    saveRDS(file = file.path(save_path, paste0(filename_prefix, "_dimensions.rds")))
+  
   TRUE
 }
 
-#' Reads quantile stars object.s from file
+#' Reads quantile stars objects from file
 #' @param folder_path str, file path to folder with saved quantile stars
-#' @return list of quantile_stars objects read in from file
+#' @return quantile stars read in from file, either named list or single item
 read_quantile_stars <- function(folder_path) {
   # Reads in files and splits up by individual stars object
   if (!dir.exists(folder_path)) {stop("Folder does not exist.")}
-  files <- list.files(folder_path, pattern = "*.tif")
-  files_groups <- split(files, sub("_\\d+.tif", "", files))
+  tif_files <- list.files(folder_path, pattern = "*.tif")
+  tif_files_groups <- split(tif_files, sub("_\\d+.tif", "", tif_files))
+  dims_files <- list.files(folder_path, pattern = "*_dimensions.rds")
+  names(dims_files) <- sub("_dimensions.rds", "", dims_files)
   
   #' Helper: reads in all stars objects and collapses into one
-  read_quantile_star <- function(file_list) {
-    file.path(folder_path, file_list) |>
-      read_stars() # lowkey broken...
+  read_quantile_star <- function(file_prefix) {
+    quantile_star <- file.path(folder_path, tif_files_groups[[file_prefix]]) |>
+      read_stars()
+    # Rearrange layers in increasing order and reformat names to XX% format
+    quantile_layers_numeric <- sub(".tif", "", names(quantile_star)) |> as.numeric()
+    sort_order <- order(quantile_layers_numeric)
+    quantile_star <- quantile_star[sort_order] |>
+      setNames(paste0(quantile_layers_numeric[sort_order], "%"))
+    
+    if (file_prefix %in% names(dims_files)) {
+      dims_specs <- readRDS(file.path(folder_path, dims_files[[file_prefix]]))
+      st_dimensions(quantile_star) <- dims_specs
+    } else {
+      message("Caution: stars object ", file_prefix, " did not save with dimension specifications. Date dimension is likely incomplete.")
+    }
+    
+    quantile_star
   }
   
-  quantile_stars <- files_groups |>
+  quantile_stars <- unique(names(tif_files_groups)) |>
     map(read_quantile_star)
   
   if(length(quantile_stars) == 1) {
     quantile_stars <- quantile_stars[[1]]
   }
-  
+
   quantile_stars
 }
   
