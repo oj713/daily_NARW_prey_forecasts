@@ -127,7 +127,9 @@ get_coper_info <- function(region = c("chfc", "nwa", "world")[[1]],
 correct_andreas <- function(stars_obj, 
                             replacement_values = list("mlotst" = 700,
                                                       "uo" = -2, 
-                                                      "bottomT" = -3), 
+                                                      "bottomT" = -3, 
+                                                      "vo" = 2.25, 
+                                                      "zos" = -1.88), 
                             diagnose = FALSE) {
   na_counts <- sapply(stars_obj, function(x) sum(is.na(x)))
   to_correct <- na_counts != min(na_counts)
@@ -142,7 +144,7 @@ correct_andreas <- function(stars_obj,
   unaccounted <- flagged_cols[!(flagged_cols %in% names(replacement_values))]
   if (length(unaccounted) > 0) {
     ifelse(diagnose, cat, stop)( # Stop the function or announce diagnosis analysis
-      "A column with missing values does not have a replacement value specified. Affected columns:",
+      "\n A column with missing values does not have a replacement value specified. Affected columns:",
       paste(unaccounted, collapse = ", "))
   }
   
@@ -176,7 +178,7 @@ correct_andreas <- function(stars_obj,
       cat("\n Variable:", flag_col,
           "\n - Missing n =", length(which(is_missing)),
           "\n - Observed variable range =", paste(round(var_range, 5), collapse = " to "),
-          "\n - Quantiles of nearby values (0/25/50/75/90) =", paste(round(quantiles, 5), collapse = ", "))
+          "\n - Quantiles of nearby values (0/25/50/75/100) =", paste(round(quantiles, 5), collapse = ", "))
       user_input <- readline("Enter replacement value: ") |>
         as.numeric() |> suppressMessages()
       if (is.na(user_input)) {

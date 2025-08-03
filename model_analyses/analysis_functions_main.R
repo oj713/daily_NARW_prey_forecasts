@@ -135,7 +135,10 @@ response_curves <- function(v,
     })
     
     # Predicting, binding value
-    model_preds <- apply_quantile_preds(wkfs, in_df, c(.025, .5, .975)) |>
+    model_preds <- apply_quantile_preds(wkfs, 
+                                        in_df, 
+                                        desired_quants = c(.025, .5, .975), 
+                                        na.ignore = FALSE) |>
       bind_cols(value = pull(in_df, var) |> as.numeric()) |>
       mutate(variable = var)
     

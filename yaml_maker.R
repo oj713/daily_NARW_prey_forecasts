@@ -1,9 +1,9 @@
 v_num <- "0.00"
 overwrite <- TRUE
-species <- c("jellyfish", "cfin", "pseudocalanus", "centrophages")[[1]]
+species <- c("jellyfish", "cfin", "pseudocalanus", "centrophages")[[2]]
 v_name <- paste0(substr(species, 1, 2), ".", v_num)
 
-note <- "Initial jellyfish model. Indifferent to tuning, day length time representation, all base variables."
+note <- "Initial cfin model. Indifferent to tuning, day length time representation, all physical variables"
 
 source("setup.R")
 
@@ -11,12 +11,12 @@ source("setup.R")
 strata = "patch" # currently unread
 coper_data_config <- list(vars_static = "bathy_depth", 
                           vars_phys = c("bottomT", "mlotst", "so", "thetao", "vel", "zos"),
-                          vars_bgc = c("chl", "no3", "nppv", "o2", "po4", "si"),
+                          vars_bgc = NULL, #c("chl", "no3", "nppv", "o2", "po4", "si"),
                           vars_time = c("day_length", "ddx_day_length"))
 species_data_config <- list(source = "ecomon", # currently unread
-                            data_columns = c("coel_m2"), # currently unread
-                            vertically_corrected = FALSE, # currently unread
-                            threshold = list(pre = 0,
+                            data_columns = c("corrected_CIV_CVI_m2"), # currently unread
+                            vertically_corrected = TRUE, # currently unread
+                            threshold = list(pre = 30000,
                                              post = NULL)) # currently unread
 # model
 seed <- 799
