@@ -29,9 +29,9 @@ dates_fix_chunk_break <-
 
 res <- generate_prediction_cubes(v, 
                                  dates_fix_chunk_break, 
-                                 save_folder = "test_recovery_mode", 
+                                 save_folder = "test_improved_dataretrieval", 
                                  verbose = TRUE, 
-                                 max_chunk_size = 2,
+                                 max_chunk_size = 3,
                                  fold_number = 3, 
-                                 add = TRUE)
+                                 add = FALSE)
 }

@@ -37,7 +37,7 @@ if (!exists("species")) {
 }
 root <- set_root(species)
 
-################## DATA RETRIEVAL AND SAVE HELPERS
+################## GENERIC DATA RETRIEVAL AND SAVE HELPERS
 
 #' Creates a string based on date start and date end
 #' @param date_range, Dates, list of date_start and date_end
@@ -110,6 +110,7 @@ get_coper_info <- function(region = c("chfc", "nwa", "world")[[1]],
   
   example_layer <- coper_DB[1,] |> read_andreas(coper_path)
   bbox <- st_bbox(example_layer)
+  crs <- st_crs(example_layer)
   
   list(coper_path = coper_path, 
        date_range = date_range,

@@ -1,5 +1,7 @@
 source("data_preparation/derive_calculated_variables.R")
 
+############ DATA PROCESSING HELPER
+
 #' Calculates quantile predictions for a set of workflows and a dataset
 #' Calculates mean, median, max, min as appropriate if num folds ≤ 3
 #' Leaves any NA rows in the dataset as is
@@ -70,6 +72,9 @@ apply_quantile_preds <- function(wkfs, data,
   returnable_data
 }
 
+
+########### DATA WRITE/READ HELPERS
+
 #' Saves a quantile stars object to file if desired
 #' Saves each layer individually, plus a dimensions object
 #' @param quantile_stars stars object with quantile attributes: 5%, 50%, etc
@@ -117,9 +122,18 @@ read_quantile_stars <- function(folder_path) {
     quantile_star <- quantile_star[sort_order] |>
       setNames(paste0(quantile_layers_numeric[sort_order], "%"))
     
+    # Add back in date information
     if (file_prefix %in% names(dims_files)) {
       dims_specs <- readRDS(file.path(folder_path, dims_files[[file_prefix]]))
-      quantile_star <- st_redimension(quantile_star, new_dims = dims_specs)
+      
+      # Have to use different functions depending on if we're adding back the date band or overriding the corrupted one
+      is_single_date <- length(st_dimensions(quantile_star)) == 2
+      if (is_single_date) {
+        quantile_star <- st_redimension(quantile_star, new_dims = dims_specs)
+      } else {
+        st_dimensions(quantile_star) <- dims_specs
+      }
+      
     } else {
       warning("Stars object ", file_prefix, " did not save with dimension specifications. Date dimension likely missing or incomplete.")
     }
@@ -136,6 +150,47 @@ read_quantile_stars <- function(folder_path) {
 
   quantile_stars
 }
+
+#' Retrieves appropriate dynamic copernicus variables from Copernicus
+#' Issue: Assumes that physical variables must exist. 
+#' @param config version yaml config
+#' @param dates Date, vector of dates
+#' @param ci_phys coper_info object, physical copernicus information
+#' @param ci_bgc coper_info object, biogeochemical copernicus information
+#' @param diagnose bool, allow diagnosis for correct_andreas? 
+#' @return stars object
+retrieve_dynamic_coper_data <- function(config, dates, ci_phys, ci_bgc, diagnose = FALSE) {
+  vars_phys <- config$training_data$coper_data$vars_phys
+  if ("vel" %in% vars_phys) {vars_phys <- c(vars_phys, "uo", "vo")}
+  if (is.null(vars_phys)) {stop("At least one physical variable must be specified.")}
+  vars_bgc <- config$training_data$coper_data$vars_bgc
+  
+  #' Helper, retrieves stars data for dates and coper info object
+  get_coper_stars <- function(coper_info, variables) {
+    coper_info$meta_db |>
+      filter(date %in% dates, variable %in% variables) |>
+      read_andreas(coper_info$coper_path)
+  }
+  
+  # Extract physical variables and correct if necessary
+  coper_phys <- get_coper_stars(ci_phys, vars_phys) |>
+    correct_andreas(diagnose = diagnose)
+  # Extract biogeochemical variables & warp to match physical
+  coper_bgc <- NULL
+  if (!is.null(vars_bgc)) {
+    coper_bgc <- get_coper_stars(ci_bgc, config$training_data$coper_data$vars_bgc) |>
+      st_warp(dest = coper_phys, method = "near")
+  }
+  
+  # Combining into single dataset
+  coper_data <- c(coper_phys, coper_bgc)
+  rm(coper_phys, coper_bgc)
+  gc()
+  
+  coper_data
+}
+
+################# MAIN FUNCTIONS
 
 # One layer of the biogeochemical coper stars is 47 MB
 # One layer of the physical coper stars is 6 MB
@@ -173,16 +228,9 @@ generate_prediction_cubes <- function(v, dates,
   if (!is.null(fold_number) && fold_number < length(v_wkfs)) {
     v_wkfs <- v_wkfs[1:fold_number]
   }
+  # Coper information
   ci_phys <- get_coper_info("chfc", "phys")
   ci_bgc <- get_coper_info("world", "bgc")
-  
-  #' Helper, retrieves stars data for dates and coper info object
-  get_coper_stars <- function(coper_info, dates) {
-    coper_info$meta_db |> filter(date %in% dates) |> 
-      read_andreas(coper_info$coper_path)
-  }
-  
-  # Static bathymetry data
   coper_bathy <- read_static(name = "deptho", path = ci_phys$coper_path)
   
   #' Helper: Processes a single date vector and saves to subfolder
@@ -228,21 +276,10 @@ generate_prediction_cubes <- function(v, dates,
     generate_prediction_chunk <- function(dates_chunk, chunk_dir = NULL) {
       if (verbose) {cat("\n Processing chunk: size", length(dates_chunk))}
       
-      # Physical copernicus data - must replace incorrect NAs in mlotst
-      coper_phys <- ci_phys |>
-        get_coper_stars(dates_chunk) |>
-        correct_andreas(diagnose = verbose)
-      
-      # BGC copernicus data - must warp to match physical data
-      coper_bgc <- ci_bgc |>
-        get_coper_stars(dates_chunk) |>
-        st_warp(dest = coper_phys, method = "near")
-      
-      # Combining into single dataset
-      coper_data <- c(coper_phys, coper_bgc)
+      coper_data <- retrieve_dynamic_coper_data(config, dates_chunk, 
+                                                ci_phys, ci_bgc, 
+                                                diagnose = verbose)
       coper_data$bathy_depth <- coper_bathy
-      rm(coper_phys, coper_bgc)
-      gc()
       
       # Converting to tibble, and adding calculated variables
       coper_data <- as_tibble(coper_data)
