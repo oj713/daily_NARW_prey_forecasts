@@ -119,9 +119,9 @@ read_quantile_stars <- function(folder_path) {
     
     if (file_prefix %in% names(dims_files)) {
       dims_specs <- readRDS(file.path(folder_path, dims_files[[file_prefix]]))
-      st_dimensions(quantile_star) <- dims_specs
+      quantile_star <- st_redimension(quantile_star, new_dims = dims_specs)
     } else {
-      message("Caution: stars object ", file_prefix, " did not save with dimension specifications. Date dimension is likely incomplete.")
+      warning("Stars object ", file_prefix, " did not save with dimension specifications. Date dimension likely missing or incomplete.")
     }
     
     quantile_star
@@ -265,7 +265,8 @@ generate_prediction_cubes <- function(v, dates,
                                           verbose = verbose)
       rm(coper_data)
       coper_chunk <- coper_chunk |>
-        st_as_stars(dims = c("lon", "lat", "date"))
+        st_as_stars(dims = c("lon", "lat", "date")) |>
+        st_set_crs(4326) # Hardcoded, based on copernicus CRS
       
       # Saving to file if chunk_dir specified and returning 
       write_quantile_stars(coper_chunk, save_path = chunk_dir, 
