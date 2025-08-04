@@ -1,0 +1,102 @@
+---
+title: "Quantile stars objects: basic operations"
+output: html_document
+---
+
+```{r}
+suppressPackageStartupMessages({
+  library(dplyr) 
+  library(stars)
+  library(sf)
+  library(ggplot2) # For plotting
+  library(purrr) # Only used by write_quantile_stars() in helper functions
+})
+
+source("helper_functions.R")
+```
+
+Quantile stars objects are saved to folder using the `write_quantile_stars()` method defined in helper_functions.R.
+We can read them in using `read_quantile_stars()` and a path to a folder. 
+
+* Quantile stars objects are saved as multiple files -- one for each attribute, and one for the dimensions of the object. 
+* In many ways, `write_quantile_stars()` and `read_quantile_stars()` are just wrappers of the `write_stars()` and `read_stars()` methods provided by the `stars` package. The differences are 1) filenames are formatted based on attribute name, and 2) the dimensions are saved as an extra file. The dimensions information is lost otherwise, as the base functions only really understand x and y dimensions. 
+* You might have to redefine the coordinate system after reading in the stars object. I'm working on fixing this one! 
+
+```{r}
+# Example data is for July 1st - July 31st, 2015
+example_stars <- read_quantile_stars("example_stars_obj_folder") |>
+  sf::st_set_crs(4326)
+
+example_stars
+```
+
+Stars objects are 3D data cubes with multiple attributes. For our case, each attribute is a quantile percentage of predictions (i.e. 0/50/100 corresponds to min/median/max of predictions across all model folds). Dimensions are specified across longitude, latitude, and date using CRS 4326. NA values correspond to land.
+
+Stars objects can be subset using square bracket notation. They can be autoplot using the `plot()` function (ugly) or using ggplot and `geom_stars()` (less ugly). 
+
+```{r}
+# Stars_object[layer_subset, x_subset, y_subset, date_subset]
+exstars_50_July1st <- example_stars["50%",,,1]
+
+basic_plot_stars <- function(stars_obj, title) {
+  ggplot() + 
+  geom_stars(data = stars_obj) + 
+  theme_bw() + 
+  coord_quickmap() +
+  scale_fill_distiller(palette = "Spectral", na.value = "transparent") +
+  labs(x = "Longitude", y = "Latitude", title = title)
+}
+
+basic_plot_stars(exstars_50_July1st, "July 1st cfin median patch probability")
+```
+
+Each individual year is saved to a subfolder within a prediction set. Dates may be at a less than daily resolution (i.e. every three days). `st_get_dimension_values()` lets you check the exact dates in use. 
+
+```{r}
+st_get_dimension_values(example_stars, which = "date")
+```
+It's easy to create new attributes or calculate from existing attributes using similar notation to dataframes. 
+
+```{r}
+example_stars$max_minus_min <- example_stars$`100%` - example_stars$`0%`
+
+basic_plot_stars(example_stars["max_minus_min",,,1], "July 1st cfin range in patch probability")
+```
+
+Stars objects can be altered to match different spatial geometries and extents using `st_crop`, `st_transform()`, and `st_warp()`. 
+
+```{r}
+# Crop extent to gulf of maine
+example_stars_cropped <- st_crop(example_stars, 
+                                 sf::st_bbox(c(xmin = -72.5, xmax = -62.5, ymin = 40, ymax = 46),
+                                             crs = 4326))
+# Switch coordinate system to pseudo mercator
+example_stars_transformed_cropped <- st_transform(example_stars_cropped, crs = 3857) 
+
+# St_warp coerces a stars object to match another
+example_stars_warped <- st_warp(src = example_stars, dest = example_stars_transformed_cropped)
+
+basic_plot_stars(example_stars_warped, "Transformed and cropped stars") + 
+  coord_sf(datum = NA) # Required to plot 3857 coord system
+```
+
+Finally, stars objects can be transformed to and from data frames using `as.data.frame()` and `st_as_stars()`. Be careful with filtering out rows, it can affect retransforming back into a stars object. 
+
+```{r}
+ex_df <- as.data.frame(example_stars)
+
+head(ex_df)
+
+ex_df$land_mask <- !complete.cases(ex_df)
+
+st_as_stars(ex_df, dims = c("lon", "lat", "date"))
+```
+
+More resources about stars: 
+
+* [Merging stars objects (useful for combining years)](https://tmieno2.github.io/R-as-GIS-for-Economists/merging-stars-objects-using-c-and-st_mosaic.html)
+* [Official stars documentation](https://r-spatial.github.io/stars/index.html)
+
+Enjoy! 
+ 
+ 
