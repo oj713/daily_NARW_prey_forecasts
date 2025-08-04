@@ -23,40 +23,62 @@ save_and_return <- function(v, plot_obj, filename, save = TRUE) {
 threshold_vs_performance <- function(v, 
                                      testing, 
                                      save = TRUE) {
+  typemap <- list("00" = "True Negative", "01" = "False Positive", "10" = "False Negative",
+                  "11" = "True Positive")
+  colormap <- c("True Negative" = "white",
+                "False Negative" = "#0295d9", 
+                "False Positive" = "#CD0000", 
+                'True Positive' = "#FFD82E")
+  metrics <- metric_set(sens, spec, f_meas)
+  
   # Calculate sensitivity, specificity, and f1 score for a threshold
-  calc_metrics <- function(threshold) {
+  calc_metrics <- function(threshold, calctype = c("confmat", "metrics")[[1]]) {
+    
     threshold_df <- testing |>
       transmute(wkf_id, patch, 
                 estimate = (.pred_1 > threshold) |> as.numeric() |> 
-                  factor(levels = c("1", "0")))
+                  factor(levels = c("1", "0")),
+                type = typemap[paste0(patch, estimate)] |> unlist() |>
+                  factor(levels = c("True Positive", "False Positive", "False Negative", "True Negative")))
     
-    metrics <- metric_set(sens, spec, f_meas)
-    
+    if (calctype == "confmat") {
     threshold_df |>
       group_by(wkf_id) |>
-      group_map(~{ # Calculate metrics across folds
-        suppressWarnings(metrics(.x, truth = patch, estimate = estimate) |> 
-                           mutate(.y))}) |>
+      group_map(~{count(.x, type) |> mutate(.y)}) |>
       bind_rows() |>
-      group_by(.metric) |>
-      group_map(~{ # Compress down to quantile results, deliberate catch for NA values
-        if (any(is.na(.x$.estimate))) {
-          c('5%' = NA, '50%' = NA, '95%' = NA, .y)
-        } else {
-          c(quantile(.x$.estimate, probs = c(.05, .5, .95)), .y)
-        }}) |>
-      bind_rows() |>
-      mutate(threshold = threshold)
+      group_by(type) |>
+      summarize(mean_count = mean(n)) |>
+      transmute(type, proportion = mean_count / sum(mean_count), 
+                threshold = threshold)
+    } else if (calctype == "metrics") {
+      threshold_df |>
+        group_by(wkf_id) |>
+        group_map(~{ # Calculate metrics across folds
+          suppressWarnings(metrics(.x, truth = patch, estimate = estimate) |> 
+                             mutate(.y))}) |>
+        bind_rows() |>
+        group_by(.metric) |>
+        group_map(~{ # Compress down to quantile results, deliberate catch for NA values
+          if (any(is.na(.x$.estimate))) {
+            c('5%' = NA, '50%' = NA, '95%' = NA, .y)
+          } else {
+            c(quantile(.x$.estimate, probs = c(.05, .5, .95)), .y)
+          }}) |>
+        bind_rows() |>
+        mutate(threshold = threshold)
+    } else {
+      stop("calculation type not supported")
+    }
   }
   
-  res <- seq(0, 1, length.out = 100) |>
-    map(calc_metrics) |>
+  res_metrics <- seq(0, 1, length.out = 100) |>
+    map(calc_metrics, calctype = "metrics") |>
     bind_rows()
-  res <- res[complete.cases(res),]
-  f_meas_res <- filter(res, .metric == "f_meas")
+  res_metrics <- res_metrics[complete.cases(res_metrics),]
+  f_meas_res <- filter(res_metrics, .metric == "f_meas")
   best_threshold <- f_meas_res$threshold[[which.max(f_meas_res$`50%`)]]
   
-  plot <- ggplot(res, aes(x = threshold)) + 
+  plot_metrics <- ggplot(res_metrics, aes(x = threshold)) + 
     geom_vline(aes(xintercept = best_threshold), col = "grey40") +
     geom_ribbon(aes(ymin = `5%`, ymax = `95%`, fill = .metric), alpha = .3) + 
     geom_line(aes(col = .metric, y = `50%`)) + 
@@ -65,7 +87,22 @@ threshold_vs_performance <- function(v,
          title = paste0(v, " threshold vs. performance (Best: ", 
                         round(best_threshold, 2), ")"))
   
-  save_and_return(v, plot, "threshold_vs_performance", save)
+  res_confmat <- seq(0, 1, length.out = 100) |>
+    map(calc_metrics, calctype = "confmat") |>
+    bind_rows()
+  plot_confmat <- ggplot(res_confmat, aes(x = threshold, y = proportion, fill = type, col = type)) + 
+    geom_col() + 
+    scale_x_continuous(limits = c(0, 1), expand = c(0, 0)) +
+    scale_y_continuous(limits = c(0, 1), expand = c(0, 0)) + theme_bw() + 
+    theme(legend.position = "bottom", legend.title = element_blank()) +
+    labs(x = "Positive threshold", y = "Average proportion of results",
+         title = paste0("Threshold vs. Confusion Matrix (Best: ", round(best_threshold, 2), ")")) +
+    scale_fill_manual(values = colormap) + 
+    scale_color_manual(values = colormap) +
+    guides(fill = guide_legend(override.aes = list(color = "black"))) +
+    geom_vline(aes(xintercept = best_threshold), linewidth = .4, linetype = "dashed")
+  
+  save_and_return(v, list(plot_metrics, plot_confmat), "threshold_vs_performance", save)
 }
 
 #' Calculates response curves
@@ -282,13 +319,7 @@ pred_vs_abund <- function(v,
   points <- base +
     geom_point(alpha = .1, size = ifelse(save, 1, .8)) +
     geom_hline(yintercept = .5, color = "red") + 
-    geom_vline(xintercept = threshold, color = "red")
-  
-  points_smooth <- base + 
-    geom_point(aes(col = patch), alpha = .2) +
-    scale_color_manual(values = c("orange", "blue")) + 
-    labs(col = "Patch") + 
-    geom_smooth(col = 'black', linewidth = .75)
+    geom_vline(xintercept = log10(threshold + 1), color = "red")
   
   annotate_help <- function(plot) {
     x_val = 1
@@ -302,7 +333,7 @@ pred_vs_abund <- function(v,
   }
   
   save_and_return(v, 
-                  list(density, points, points_smooth) |>
+                  list(density, points) |>
                     lapply(annotate_help), 
                   "predictions_vs_abundance", 
                   save = save)

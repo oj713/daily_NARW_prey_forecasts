@@ -1,10 +1,10 @@
-species <- "cfin"
+species <- "jellyfish"
 source("setup.R")
 source("data_preparation/data_from_config.R")
 source("model_analyses/analysis_functions_main.R")
 source("generate_data_cubes.R")
 
-v <- "cf.0.00"
+v <- "je.0.00"
 v_config <- read_config(v)
 wkfs <- get_v_wkfs(v)
 testing <- get_v_testing(v)
