@@ -32,36 +32,33 @@ apply_quantile_preds <- function(wkfs, data,
     
     res
   }
-  pred_quantiles <- wkfs |>
+  wkf_preds <- wkfs |>
     imap(get_wkf_column) |>
     bind_cols() |>
     suppressMessages()
   
   if(verbose) {cat("\r Calculating quantiles...")}
+  pred_quantiles <- NULL
   # Different calculation methods for high fold versus fold count ≤ 3
   if (n_folds >= 3) {
-    # Calculate quantiles (n_folds ≥ 4) OR sort to min/middle/max (n_folds = 3)
+    # Calculate quantiles
     if (n_folds == 3) {desired_quants <- c(0, .5, 1)}
-    function_to_apply <- ifelse(n_folds == 3, sort, function(x) quantile(x, probs = desired_quants))
-    
-    # pbapply::pbapply() is an improvement to the base apply() function
-    # it shows a progress bar and is about 10% faster for quantile()
-    pbapply::pboptions(type = ifelse(verbose, "timer", "none"))
-    pred_quantiles <- pbapply(pred_quantiles, 1, function_to_apply) |>
-      t() |>
-      as_tibble(.name_repair = "unique_quiet")
+    # matrixStats is 10x faster than apply(x, 1, quantile)
+    pred_quantiles <- wkf_preds |>
+      t() |> 
+      matrixStats::colQuantiles(probs = desired_quants)
     
   } else if (n_folds <= 2) {
     # Mean (n_folds = 2) OR identity (n_folds = 1)
     desired_quants <- c(.5)
     if (n_folds == 2) {
-      pred_quantiles <- rowMeans(pred_quantiles) |>
+      pred_quantiles <- rowMeans(wkf_preds) |>
       as_tibble_col()
     }
+    colnames(pred_quantiles) <- paste0(desired_quants * 100, "%")
   }
   
   if(verbose) {cat("\r Formatting to return...")}
-  colnames(pred_quantiles) <- paste0(desired_quants * 100, "%")
   
   # Adding back empty entries for NA values
   returnable_data <- data |>

@@ -9,7 +9,7 @@ suppressPackageStartupMessages(
     library(copernicus) # Copernicus retrieval
     library(andreas)
     library(bundle) # for saving neural network model types (not that we have any atm)
-    library(pbapply) # for faster quantile processing
+    library(matrixStats) # for fast quantile processing
   })
 
 #' Sets the species for the remainder of the session. 
