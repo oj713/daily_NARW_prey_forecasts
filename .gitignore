@@ -1,5 +1,7 @@
-# GIF files
-.gif
+# data files
+*.gif
+*.tif
+*.rds
 
 # History files
 .Rhistory

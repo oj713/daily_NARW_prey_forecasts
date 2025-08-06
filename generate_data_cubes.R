@@ -1,19 +1,25 @@
 source("data_preparation/derive_calculated_variables.R")
-library(pbapply)
+
+############ DATA PROCESSING HELPER
 
 #' Calculates quantile predictions for a set of workflows and a dataset
+#' Calculates mean, median, max, min as appropriate if num folds ≤ 3
 #' Leaves any NA rows in the dataset as is
 #' @param wkfs workflow set
 #' @param data df, data to predict on
 #' @param desired_quants numeric, list of percentiles to return
+#'  This param is ignored if num folds ≤ 3
 #' @param verbose bool, print progress? 
-#'  - Note that quantile progress bar at present cannot be hidden
+#' @param na.ignore bool, ignore rows with any NA values? 
 #' @return df, quantile results with id columns lon, lat, date
-apply_quantile_preds <- function(wkfs, data, desired_quants, verbose = FALSE) {
+apply_quantile_preds <- function(wkfs, data, 
+                                 desired_quants = c(0, .05, .5, .95, 1), 
+                                 verbose = FALSE, na.ignore = TRUE) {
   n_folds <- length(wkfs)
-  predictable_indices <- complete.cases(data)
+  predictable_indices <- (if (na.ignore) { complete.cases(data) }
+                          else {TRUE})
   
-  if(verbose) {cat("\n Predicting... 0 / 5")}
+  if(verbose) {cat("\n Predicting... 0 /", n_folds)}
   
   # Calculates predictions from a single workflow
   get_wkf_column <- function(wkf, idx) {
@@ -26,26 +32,33 @@ apply_quantile_preds <- function(wkfs, data, desired_quants, verbose = FALSE) {
     
     res
   }
-  pred_quantiles <- wkfs |>
+  wkf_preds <- wkfs |>
     imap(get_wkf_column) |>
     bind_cols() |>
     suppressMessages()
   
   if(verbose) {cat("\r Calculating quantiles...")}
-  # pbapply::pbapply() is an improvement to the base apply() function
-  # it shows a progress bar and is about 10% faster for quantile()
-  pred_quantiles <- pbapply(pred_quantiles, 1, 
-                          function(x) quantile(x, probs = desired_quants))
+  pred_quantiles <- NULL
+  # Different calculation methods for high fold versus fold count ≤ 3
+  if (n_folds >= 3) {
+    # Calculate quantiles
+    if (n_folds == 3) {desired_quants <- c(0, .5, 1)}
+    # matrixStats is 10x faster than apply(x, 1, quantile)
+    pred_quantiles <- wkf_preds |>
+      t() |> 
+      matrixStats::colQuantiles(probs = desired_quants)
+    
+  } else if (n_folds <= 2) {
+    # Mean (n_folds = 2) OR identity (n_folds = 1)
+    desired_quants <- c(.5)
+    if (n_folds == 2) {
+      pred_quantiles <- rowMeans(wkf_preds) |>
+      as_tibble_col()
+    }
+    colnames(pred_quantiles) <- paste0(desired_quants * 100, "%")
+  }
   
   if(verbose) {cat("\r Formatting to return...")}
-  pred_quantiles <- (if (length(desired_quants) > 1) {
-    pred_quantiles |>
-      t() |>
-      as_tibble(.name_repair = "unique")
-  } else {
-    pred_quantiles |>
-      as_tibble_col(paste0(desired_quants * 100, "%"))
-  })
   
   # Adding back empty entries for NA values
   returnable_data <- data |>
@@ -55,6 +68,126 @@ apply_quantile_preds <- function(wkfs, data, desired_quants, verbose = FALSE) {
   
   returnable_data
 }
+
+
+########### DATA WRITE/READ HELPERS
+
+#' Saves a quantile stars object to file if desired
+#' Saves each layer individually, plus a dimensions object
+#' @param quantile_stars stars object with quantile attributes: 5%, 50%, etc
+#' @param save_path str, path to folder OR NULL for no save
+#' @param filename_prefix str, prefix for file. Ignored if no save
+#' @return TRUE if saved successfully, input if no save
+write_quantile_stars <- function(quantile_stars, 
+                                 save_path = NULL, filename_prefix = NULL) {
+  
+  if(is.null(save_path)) {return(quantile_stars)}
+  
+  # Helper, saves a single layer
+  save_layer <- function(quantile_name, index) {
+    filename <- paste0(filename_prefix, "_", gsub("%", "", quantile_name), ".tif")
+    write_stars(quantile_stars, file.path(save_path, filename), layer = index)
+  }
+  
+  names(quantile_stars) |>
+    iwalk(save_layer)
+  
+  st_dimensions(quantile_stars) |>
+    saveRDS(file = file.path(save_path, paste0(filename_prefix, "_dimensions.rds")))
+  
+  TRUE
+}
+
+#' Reads quantile stars objects from file
+#' @param folder_path str, file path to folder with saved quantile stars
+#' @return quantile stars read in from file, either named list or single item
+read_quantile_stars <- function(folder_path) {
+  # Reads in files and splits up by individual stars object
+  if (!dir.exists(folder_path)) {stop("Folder does not exist.")}
+  tif_files <- list.files(folder_path, pattern = "*.tif")
+  tif_files_groups <- split(tif_files, sub("_\\d+.tif", "", tif_files))
+  dims_files <- list.files(folder_path, pattern = "*_dimensions.rds")
+  names(dims_files) <- sub("_dimensions.rds", "", dims_files)
+  
+  #' Helper: reads in all stars objects and collapses into one
+  read_quantile_star <- function(file_prefix) {
+    quantile_star <- file.path(folder_path, tif_files_groups[[file_prefix]]) |>
+      read_stars()
+    # Rearrange layers in increasing order and reformat names to XX% format
+    quantile_layers_numeric <- sub(".tif", "", names(quantile_star)) |> as.numeric()
+    sort_order <- order(quantile_layers_numeric)
+    quantile_star <- quantile_star[sort_order] |>
+      setNames(paste0(quantile_layers_numeric[sort_order], "%"))
+    
+    # Add back in date information
+    if (file_prefix %in% names(dims_files)) {
+      dims_specs <- readRDS(file.path(folder_path, dims_files[[file_prefix]]))
+      
+      # Have to use different functions depending on if we're adding back the date band or overriding the corrupted one
+      is_single_date <- length(st_dimensions(quantile_star)) == 2
+      if (is_single_date) {
+        quantile_star <- st_redimension(quantile_star, new_dims = dims_specs)
+      } else {
+        st_dimensions(quantile_star) <- dims_specs
+      }
+      
+    } else {
+      warning("Stars object ", file_prefix, " did not save with dimension specifications. Date dimension likely missing or incomplete.")
+    }
+    
+    quantile_star
+  }
+  
+  quantile_stars <- unique(names(tif_files_groups)) |>
+    map(read_quantile_star)
+  
+  if(length(quantile_stars) == 1) {
+    quantile_stars <- quantile_stars[[1]]
+  }
+
+  quantile_stars
+}
+
+#' Retrieves appropriate dynamic copernicus variables from Copernicus
+#' Issue: Assumes that physical variables must exist. 
+#' @param config version yaml config
+#' @param dates Date, vector of dates
+#' @param ci_phys coper_info object, physical copernicus information
+#' @param ci_bgc coper_info object, biogeochemical copernicus information
+#' @param diagnose bool, allow diagnosis for correct_andreas? 
+#' @return stars object
+retrieve_dynamic_coper_data <- function(config, dates, ci_phys, ci_bgc, diagnose = FALSE) {
+  vars_phys <- config$training_data$coper_data$vars_phys
+  if ("vel" %in% vars_phys) {vars_phys <- c(vars_phys, "uo", "vo")}
+  if (is.null(vars_phys)) {stop("At least one physical variable must be specified.")}
+  vars_bgc <- config$training_data$coper_data$vars_bgc
+  
+  #' Helper, retrieves stars data for dates and coper info object
+  get_coper_stars <- function(coper_info, variables) {
+    coper_info$meta_db |>
+      filter(date %in% dates, variable %in% variables) |>
+      read_andreas(coper_info$coper_path)
+  }
+  
+  # Extract physical variables and correct if necessary
+  coper_phys <- get_coper_stars(ci_phys, vars_phys) |>
+    correct_andreas(diagnose = diagnose)
+  # Extract biogeochemical variables & warp to match physical
+  coper_bgc <- NULL
+  if (!is.null(vars_bgc)) {
+    coper_bgc <- get_coper_stars(ci_bgc, config$training_data$coper_data$vars_bgc) |>
+      st_warp(dest = coper_phys, method = "near")
+  }
+  
+  # Combining into single dataset
+  coper_data <- c(coper_phys, coper_bgc)
+  rm(coper_phys, coper_bgc)
+  gc()
+  
+  coper_data
+}
+
+################# MAIN FUNCTIONS
 
 # One layer of the biogeochemical coper stars is 47 MB
 # One layer of the physical coper stars is 6 MB
@@ -66,23 +199,35 @@ apply_quantile_preds <- function(wkfs, data, desired_quants, verbose = FALSE) {
 #' @param save_folder str, name of folder to create and save to. No save if NULL.
 #' @param verbose bool, print progression?
 #' @param max_chunk_size int, maximum number of dates to process at a time
+#' @param desired_quants numeric, quantile percentages to calculate
+#' @param fold_number int, if not NULL subset workflows to reduce calculation time
+#' @param add bool, adding to existing material saved to file? 
+#'  If FALSE, only unused save_folder names are allowed
 #' @return either prediction stars object or list of subfolders with success booleans
 generate_prediction_cubes <- function(v, dates, 
                                       save_folder = NULL, 
                                       verbose = TRUE, 
-                                      max_chunk_size = 92) {
-  config <- read_config(v)
-  v_wkfs <- get_v_wkfs(v)
-  ci_phys <- get_coper_info("chfc", "phys")
-  ci_bgc <- get_coper_info("world", "bgc")
-  
-  #' Helper, retrieves stars data for dates and coper info object
-  get_coper_stars <- function(coper_info, dates) {
-    coper_info$meta_db |> filter(date %in% dates) |> 
-      read_andreas(coper_info$coper_path)
+                                      max_chunk_size = 92, 
+                                      desired_quants = c(0, .05, .25, .5, .75, .95, 1),
+                                      fold_number = NULL,
+                                      add = FALSE) {
+  # Force save if dates size is too large
+  if (length(unlist(dates)) > max_chunk_size & is.null(save_folder)) {
+    stop("Must save to file for dates selection larger than max chunk size.")
+  }
+  if (!add && !is.null(save_folder) && dir.exists(v_path(v, "preds", save_folder))) {
+    stop("Unless 'add' is TRUE, must specify new save folder.")
   }
   
-  # Static bathymetry data
+  config <- read_config(v)
+  v_wkfs <- get_v_wkfs(v)
+  # Subset workflows if desired
+  if (!is.null(fold_number) && fold_number < length(v_wkfs)) {
+    v_wkfs <- v_wkfs[1:fold_number]
+  }
+  # Coper information
+  ci_phys <- get_coper_info("chfc", "phys")
+  ci_bgc <- get_coper_info("world", "bgc")
   coper_bathy <- read_static(name = "deptho", path = ci_phys$coper_path)
   
   #' Helper: Processes a single date vector and saves to subfolder
@@ -95,35 +240,51 @@ generate_prediction_cubes <- function(v, dates,
                       ifelse(is.null(save_subfolder), "all", save_subfolder),
                       "( n =", length(dates_vec), ")")}
     
-    #' Helper: Processes a date vector and returns stars object
+    save_path <- NULL
+    recovered_chunks <- NULL
+    dates_to_calculate <- dates_vec
+    # Are we saving to file??
+    if (!is.null(save_folder)) {
+      save_path <- v_path(v, "preds", save_folder, save_subfolder)
+      # Does the partition folder already exist? 
+      if (dir.exists(save_path)) {
+        tmp_path <- file.path(save_path, "tmp_chunks")
+        # Either initiating recovery mode OR skipping a previously-completed folder
+        if (dir.exists(tmp_path)) {
+          recovered_chunks <- read_quantile_stars(tmp_path)
+          recovered_dates <- recovered_chunks |>
+            map(st_get_dimension_values, which = "date") |> unlist() |> as.Date()
+          dates_to_calculate <- dates_vec[!(dates_vec %in% recovered_dates)]
+          cat("\n Recovering partition...", length(recovered_chunks), "chunks retrieved.")
+        } else {
+          cat("\n Partition already exists. Skipping...")
+          return(TRUE)
+        }
+      } else {
+        dir.create(save_path, recursive = TRUE)
+      }
+    }
+    
+    #' Helper: Processes a date chunk and returns stars object
+    #' Saves chunks to temporary directory if desired
     #' @param dates_chunk dates to process
+    #' @param chunk_dir str, path to tmp chunks directory or NULL for no save
     #' @return stars object of predictions
-    generate_prediction_chunk <- function(dates_chunk) {
+    generate_prediction_chunk <- function(dates_chunk, chunk_dir = NULL) {
       if (verbose) {cat("\n Processing chunk: size", length(dates_chunk))}
       
-      # Physical copernicus data - must replace incorrect NAs in mlotst
-      coper_phys <- ci_phys |>
-        get_coper_stars(dates_chunk) |>
-        correct_andreas(replacement_values = list("mlotst" = 700, 
-                                                  "vo" = 0))
-      # BGC copernicus data - must warp to match physical data
-      coper_bgc <- ci_bgc |>
-        get_coper_stars(dates_chunk) |>
-        st_warp(dest = coper_phys, method = "near")
-      
-      # Combining into single dataset
-      coper_data <- c(coper_phys, coper_bgc)
+      coper_data <- retrieve_dynamic_coper_data(config, dates_chunk, 
+                                                ci_phys, ci_bgc, 
+                                                diagnose = verbose)
       coper_data$bathy_depth <- coper_bathy
-      rm(coper_phys, coper_bgc)
-      gc()
       
       # Converting to tibble, and adding calculated variables
       coper_data <- as_tibble(coper_data)
-      coper_data <- (if(length(dates_vec) > 1) {
+      coper_data <- (if(length(dates_chunk) > 1) {
         mutate(coper_data, date = as.Date(time)) |>
           select(-time)
       } else {
-        mutate(coper_data, date = dates_vec, .after = y)
+        mutate(coper_data, date = dates_chunk, .after = y)
       })
       coper_data <- coper_data |>
         rename(lon = x, lat = y) |>
@@ -132,56 +293,91 @@ generate_prediction_cubes <- function(v, dates,
         derive_calculated_variables(config)
       
       # Retrieving predictions
-      coper_preds <- apply_quantile_preds(v_wkfs, 
+      coper_chunk <- apply_quantile_preds(v_wkfs, 
                                           coper_data, 
-                                          desired_quants = c(0, .05, .25, .5, .75, .95, 1), 
+                                          desired_quants = desired_quants, 
                                           verbose = verbose)
       rm(coper_data)
+      coper_chunk <- coper_chunk |>
+        st_as_stars(dims = c("lon", "lat", "date")) |>
+        st_set_crs(4326) # Hardcoded, based on copernicus CRS
       
-      # Converting to stars object
-      coper_preds |>
-        st_as_stars(dims = c("lon", "lat", "date"))
+      # Saving to file if chunk_dir specified and returning 
+      write_quantile_stars(coper_chunk, save_path = chunk_dir, 
+          filename_prefix = date_range_to_string(range(dates_chunk), "CHUNK"))
+      
+      coper_chunk
     }
     
     # Creating data chunks & processing
     coper_preds <- NULL
+    chunk_dir <- NULL
     if (length(dates_vec) <= max_chunk_size) {
-      coper_preds <- generate_prediction_chunk(dates_vec)
-    } else {
-      dates_chunks <- split(dates_vec, ceiling(seq_along(dates_vec)/max_chunk_size))
-      
-      # Process by chunk, combine at the end
-      coper_preds <- dates_chunks |>
-        map(generate_prediction_chunk)
-      
-      coper_preds <- Reduce(function(a, b) c(a, b, along = 3), coper_preds) |>
-        st_set_dimensions("date", values = dates_vec)
-    }
-    
-    # Saving
-    if (is.null(save_folder)) {
-      return(coper_preds)
-    } else {
-      save_path <- ifelse(is.null(save_subfolder), 
-                          v_path(v, "preds", save_folder),
-                          v_path(v, "preds", save_folder, save_subfolder))
-      if (!dir.exists(save_path)) {dir.create(save_path, recursive = TRUE)}
-      
-      save_layer <- function(attribute_name, index) {
-        filename <- 
-          paste0(paste(c(species, save_folder, save_subfolder, 
-                         gsub("%", "", attribute_name)), collapse = "_"), ".tif")
-        write_stars(coper_preds, file.path(save_path, filename), layer = index)
+      # Case 1: we can just process everything in one go
+      coper_preds <- generate_prediction_chunk(dates_to_calculate, chunk_dir)
+    } else { 
+      # Case 2: we have to chunk the data and save backups in case something goes wrong
+      dates_chunks <- split(dates_to_calculate, 
+                            ceiling(seq_along(dates_to_calculate)/max_chunk_size))
+      if (!is.null(save_folder)) {
+        chunk_dir <- file.path(save_path, "tmp_chunks")
+        if (!dir.exists(chunk_dir)) {dir.create(chunk_dir)}
       }
       
-      names(coper_preds) |>
-        iwalk(save_layer)
+      # Process one chunk at a time. If something breaks, allows chunk recovery
+      recovery <- tryCatch({
+        # Map through and retrieve all chunks, saving intermediary chunks to file
+        coper_preds <- dates_chunks |>
+          map(~generate_prediction_chunk(.x, chunk_dir))
+        coper_preds <- c(recovered_chunks, coper_preds) # adding back recovered chunks
+        
+        coper_preds <- Reduce(function(a, b) c(a, b, along = 3), coper_preds) |>
+          st_set_dimensions("date", values = dates_vec)
+        
+        unlink(chunk_dir, recursive = TRUE) # Delete chunk directory, we don't need it anymore!
+      }, 
+      error = function(e) {
+        # Provide information on error and assemble chunk meta stats
+        chunk_files <- list.files(path = chunk_dir)
+        saved_dates <- chunk_files |> map(string_to_date_range) |>
+          unlist() |> as.Date() |> unique()
+        
+        message("Something went wrong while processing partition. \n
+                Error: ", e, "\n", 
+                "Partition name: ", ifelse(is.null(save_subfolder), "all", save_subfolder), "\n",
+                "Saved chunks: ", length(chunk_files)/length(desired_quants), "\n",
+                "Saved date range: ", paste(range(saved_dates), collapse = " to "), "\n",
+                "Returning recovery information...")
+        
+        # Returning information necessary for recovery
+        recovery_info <- list(
+          error = e,
+          v = v, 
+          save_folder = save_folder, 
+          save_subfolder = save_subfolder,
+          saved_dates = saved_dates,
+          failed_chunk = dates_chunk,
+          partition_dates = dates_vec
+        )
+        
+        return (recovery_info)
+      })
       
-      TRUE
+      if (recovery != 0) {
+        cat("\n Partition error. Returning recovery information. \n")
+        return(recovery)
+      }
     }
-  }
   
-  cat("\n Done!")
+    # Save and return stars object
+    cat("\n Partition Done! \n")
+    write_quantile_stars(
+      coper_preds,
+      save_path = save_path, 
+      filename_prefix = paste(c(species, save_folder, save_subfolder), collapse = "_")
+    )
+  }
+
   if (class(dates) == "Date") {
     generate_prediction_cube(dates, save_subfolder = NULL)
   } else {
@@ -196,28 +392,50 @@ generate_prediction_cubes <- function(v, dates,
 #' @param v str, version
 #' @param date_start Date, start date
 #' @param date_end Date, end date
+#' @param save_folder str, filename for main folder. Autogenerated if NULL
 #' @param verbose bool, print progress?
+#' @param fold_number int, if not NULL subset workflows to reduce calculation time
+#' @param date_downsample int, downsample dates vector integer value or NULL
+#' @param add bool, adding to existing material saved to file? 
 #' @return path to save folder
 generate_yearly_cubes <- function(v, 
                                   date_start, 
                                   date_end,
-                                  verbose = TRUE) {
+                                  save_folder = NULL,
+                                  verbose = TRUE, 
+                                  fold_number = NULL,
+                                  date_downsample = NULL,
+                                  add = FALSE) {
   
   # Create partitioned date vector
   all_dates <- seq(date_start, date_end, by = "days")
-  dates_chunks <- split(all_dates, lubridate::year(all_dates))
+  if (!is.null(date_downsample)) {
+    all_dates <- all_dates[seq(1,length(all_dates), date_downsample)]
+  }
+  dates_years <- split(all_dates, lubridate::year(all_dates))
   
-  # Create main folder filename
-  main_folder <- sprintf("%s_to_%s", 
-                         format(date_start, "%m_%d_%Y"), 
-                         format(date_end, "%m_%d_%Y"))
+  # Create main folder filename if no override provided
+  if (is.null(main_folder)) {
+    save_folder <- paste0(
+      ifelse(is.null(date_downsample), "daily_resolution", 
+            paste0(date_downsample, "day_resolution")),
+      ifelse(is.null(fold_number), "", 
+             paste0("_", fold_number, "fold"))
+    )
+  }
   
-  res <- generate_prediction_cubes(v, dates_chunks, save_folder = main_folder, 
-                                   verbose = TRUE, max_chunk_size = 92)
+  res <- generate_prediction_cubes(v, dates_years, 
+                                   save_folder = save_folder, 
+                                   verbose = verbose, 
+                                   max_chunk_size = 92, 
+                                   fold_number = fold_number,
+                                   add = add)
   
-  if (!all(res)) {
-    stop("Something went wrong.")
+  # Are all entries a TRUE?? 
+  if (!all(unlist(res) |> vapply(isTRUE, logical(1)))) {
+    return(res) # return results if not
   } else {
+    if(verbose) {cat("Success!")}
     return(v_path(v, "preds", main_folder))
   }
 }

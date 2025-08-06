@@ -6,7 +6,9 @@ source("data_preparation/derive_calculated_variables.R")
 #' @return df, input data for a model
 data_from_config <- function(config, extra_vars = NULL) {
   
-  base_data <- get_input_data("abund_phys_bgc_bathy_chfc.csv.gz")
+  base_data <- get_input_data(
+    ifelse(species == "cfin", "mec_bathy_ET.csv.gz", 
+    "abund_phys_bgc_bathy_chfc.csv.gz"))
   
   # Parse calculated variables, including extra vars
   all_variables <- config$training_data$coper_data |> unlist() |> as.vector()

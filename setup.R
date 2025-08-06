@@ -1,15 +1,15 @@
 suppressPackageStartupMessages(
   {
     library(stars) # spatial data
-    library(ncdf4) # querying data 
-    library(tidymodels)
-    library(purrr)
     library(sf)
+    library(tidymodels) # Modeling
+    library(purrr) # Better data handling
     library(lubridate)
-    library(viridis)
+    library(viridis) # Improve plots
     library(copernicus) # Copernicus retrieval
     library(andreas)
-    library(bundle) # for saving MLP model types
+    library(bundle) # for saving neural network model types (not that we have any atm)
+    library(matrixStats) # for fast quantile processing
   })
 
 #' Sets the species for the remainder of the session. 
@@ -37,7 +37,33 @@ if (!exists("species")) {
 }
 root <- set_root(species)
 
-################## DATA RETRIEVAL AND SAVE HELPERS
+################## GENERIC DATA RETRIEVAL AND SAVE HELPERS
+
+#' Creates a string based on date start and date end
+#' @param date_range, Dates, list of date_start and date_end
+#' @param ... str, other characters
+#' @return str in format date_start_to_date_end_extra_args
+date_range_to_string <- function(date_range, ...) {
+  paste(c(format(date_range[[1]], "%m_%d_%Y"),
+        "to", 
+        format(date_range[[2]], "%m_%d_%Y"), 
+        ...),
+        collapse = "_")
+}
+
+#' Retrieves a date range from a string from date_to_date
+#' @param date_string, str with embedded date range
+#' @return Dates, list of date_start and date_end
+string_to_date_range <- function(date_string) {
+  match <- regmatches(date_string, 
+                      regexpr("\\d{2}_\\d{2}_\\d{4}_to_\\d{2}_\\d{2}_\\d{4}", date_string))
+  
+  if (length(match) == 0) {stop("No date range detected in input string:", date_string)}
+  
+  unlist(strsplit(match, "_to_")) |>
+    map(~as.Date(.x, format = "%m_%d_%Y")) |> 
+    setNames(c("date_start", "date_end"))
+}
 
 #' Saves an eda plot object to file
 #' @param plot_obj, obj to save to pdf
@@ -84,6 +110,7 @@ get_coper_info <- function(region = c("chfc", "nwa", "world")[[1]],
   
   example_layer <- coper_DB[1,] |> read_andreas(coper_path)
   bbox <- st_bbox(example_layer)
+  crs <- st_crs(example_layer)
   
   list(coper_path = coper_path, 
        date_range = date_range,
@@ -93,38 +120,74 @@ get_coper_info <- function(region = c("chfc", "nwa", "world")[[1]],
 
 #' Corrects stars objects with incorrect missing values. Intended for use with Copernicus.
 #' Assumes that the stars object uses NA to both indicate masked values, i.e. land, and missing values.
-#' Assumes that at least half of the attributes are not missing any values. 
+#' In diagnose mode, will request user input for variables missing values
 #' @param stars_obj stars, stars object to correct. 
 #' @param replacement_values list, named list of attribute names and a value to sub in for any missing entries.
+#' @param diagnose bool, show diagnostic statistics for any variables unaccounted for?
 #' @return stars object with any incorrect missing values replaced w/ replacement value.
 correct_andreas <- function(stars_obj, 
-                            replacement_values = list("mlotst" = 700)) {
+                            replacement_values = list("mlotst" = 700,
+                                                      "uo" = -2, 
+                                                      "bottomT" = -3, 
+                                                      "vo" = 2.25, 
+                                                      "zos" = -1.88), 
+                            diagnose = FALSE) {
   na_counts <- sapply(stars_obj, function(x) sum(is.na(x)))
-  # this method does assume that at least half of the attributes aren't missing any data
-  to_correct <- na_counts != median(na_counts)
-  flagged_columns <- names(na_counts[to_correct])
+  to_correct <- na_counts != min(na_counts)
+  flagged_cols <- names(na_counts[to_correct])
   
   # Return if everything is in order
-  if(length(flagged_columns) == 0) {
+  if(length(flagged_cols) == 0) {
     return(stars_obj)
   }
   
   # Check that all columns which are missing values have a specified replacement value
-  accounted <- flagged_columns %in% names(replacement_values)
-  if (!all(accounted)) {
-    stop(paste("A column with missing values does not have a replacement value specified. Affected columns:",
-               paste(flagged_columns[!accounted], collapse = ", ")))
+  unaccounted <- flagged_cols[!(flagged_cols %in% names(replacement_values))]
+  if (length(unaccounted) > 0) {
+    ifelse(diagnose, cat, stop)( # Stop the function or announce diagnosis analysis
+      "\n A column with missing values does not have a replacement value specified. Affected columns:",
+      paste(unaccounted, collapse = ", "))
   }
   
   # Which values are supposed to be NAs? i.e. are land mask
   correct_NAs <- stars_obj |>
     pull(which(!to_correct)[[1]]) |> # attribute with no missing values
     is.na()
+  x_nrow <- nrow(stars_obj[[1]])
   
   # Replacing missing values
-  for (flag_col in flagged_columns) {
+  for (flag_col in flagged_cols) {
     # Columns for target value with NA values which aren't supposed to be NA
     is_missing <- is.na(stars_obj[[flag_col]]) & !correct_NAs
+    
+    # Prints diagnosis statistics and requests user-inputted replacement value
+    if (diagnose && flag_col %in% unaccounted) {
+      var_range <- stars_obj[[flag_col]] |> range(na.rm = TRUE)
+      
+      # Quantile of values surrounding missing values
+      neighbor_indices <- which(is_missing) |>
+        map(\(i) c(i - 1, i + 1, # neighbors along x axis
+                   i - x_nrow, i + x_nrow)) |> # neighbors along y axis 
+        unlist()
+      # Filter out invalid indices
+      neighbor_indices <- neighbor_indices[neighbor_indices > 1 & neighbor_indices < length(is_missing)]
+      neighboring_values <- stars_obj[[flag_col]][neighbor_indices]
+      neighboring_values <- neighboring_values[!is.na(neighboring_values)]
+      quantiles <- quantile(neighboring_values)
+      
+      # Printing and requesting
+      cat("\n Variable:", flag_col,
+          "\n - Missing n =", length(which(is_missing)),
+          "\n - Observed variable range =", paste(round(var_range, 5), collapse = " to "),
+          "\n - Quantiles of nearby values (0/25/50/75/100) =", paste(round(quantiles, 5), collapse = ", "))
+      user_input <- readline("Enter replacement value: ") |>
+        as.numeric() |> suppressMessages()
+      if (is.na(user_input)) {
+        stop("Invalid entry.")
+      } else {
+        replacement_values[[flag_col]] <- user_input
+      }
+    }
     
     stars_obj[[flag_col]][is_missing] <- replacement_values[[flag_col]]
   }
@@ -195,12 +258,15 @@ var_abb <- function() {
 #' Constructs a file path to given version folder
 #' 
 #' @param v model version
-#' @param ... additional path specifiers
+#' @param ... additional path specifiers, ignoring NULL entries
 #' @return file path to version folder
 v_path <- function(v = "sp.0.00", ...) {
   major <- (strsplit(v, '.', fixed = TRUE) |> unlist())[1:2] |>
     paste(collapse = ".")
-  file.path(root, "versions", major, v, ...)
+  
+  extras <- Filter(Negate(is.null), list(...))
+  
+  do.call(file.path, c(root, "versions", major, v, extras))
 }
 
 #' Retrieves a model version from file
