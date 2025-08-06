@@ -12,7 +12,7 @@ res <- generate_yearly_cubes(v,
                              date_start, 
                              date_end, 
                              date_downsample = 3,
-                             fold_number = 2,
+                             fold_subset = 2,
                              recovery = FALSE,
                              verbose = TRUE)
 
@@ -32,6 +32,6 @@ res <- generate_prediction_cubes(v,
                                  save_folder = "test_fast_quantiles2", 
                                  verbose = TRUE, 
                                  max_chunk_size = 3,
-                                 fold_number = NULL, 
+                                 fold_subset = NULL, 
                                  add = FALSE)
 }
