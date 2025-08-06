@@ -13,7 +13,7 @@ set.seed(config$model$seed)
 
 # Retrieve data
 mec <- data_from_config(config)
-count(mec, patch) |> mutate(prop = n/sum(n))
+dplyr::count(mec, patch) |> mutate(prop = n/sum(n))
 
 # mec_split <- initial_split(mec, prop = 3/4, strata = patch)
 K = 5 # 100 for any scale model 
