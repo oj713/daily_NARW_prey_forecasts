@@ -1,0 +1,674 @@
+---
+title: "Hmmmm"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+suppressPackageStartupMessages({
+  library(stars)
+  library(readr)
+})
+```
+
+```{r}
+infile = "/mnt/ecocast/projects/students/ojohnson/daily-forecasts/model_exploration/sample_stars.rds"
+x = readr::read_rds(infile)
+nodate = st_as_stars()
+nodate$valuse2 = 1
+```
+
+```{r}
+suppressWarnings({
+  y = stars::write_mdim(x, "out.nc")
+  nodate_y = stars::write_mdim(nodate, "outnodate.nc")
+})
+```
+
+```{r}
+suppressWarnings({
+  stars = stars::read_stars("out.nc")
+  mdim = stars::read_mdim("out.nc")
+  ncdf = stars::read_ncdf("out.nc")
+  
+  mdimnodate = stars::read_mdim("outnodate.nc")
+})
+```
+
+```{r}
+st_dimensions(x)
+st_dimensions(y)
+st_dimensions(stars)
+st_dimensions(mdim)
+st_dimensions(ncdf)
+
+st_dimensions(mdimnodate)
+```
+
+```{r}
+d = st_dimensions(stars)
+d[[3]]$offset = d[[3]]$offset |>
+  units::drop_units() |>
+  as.Date(origin = as.Date("1970-01-01"))
+d[[3]]$delta = 1
+d[[3]]$refsys = "Date"
+st_dimensions(stars) <- d
+```
+
+```{r}
+st_dimensions(x)
+st_dimensions(stars)
+```
+
+# Digging into the source code
+
+Helpers from [stars github](https://github.com/r-spatial/stars/blob/main/R/mdim.R)
+```{r}
+# convert stars object into a list of CDL-like variables with named dimensions
+is_curvilinear <- function(x) {return(FALSE)}
+add_attr = function(x, at) { # append at to attribute "attrs"
+		structure(x, attrs = c(attr(x, "attrs"), at))
+}
+add_units_attr = function(l) {
+		f = function(x) {
+			if (inherits(x, "units"))
+				add_attr(x, c(units = as.character(units(x))))
+			else if (inherits(x, c("POSIXct", "PCICt"))) {
+				cal = if (!is.null(cal <- attr(x, "cal")))
+					c(calendar = paste0(cal, "_day")) # else NULL, intended
+				x = as.numeric(x)
+				if (all(x %% 86400 == 0))
+					add_attr(x/86400, c(units = "days since 1970-01-01", cal))
+				else if (all(x %% 3600 == 0))
+					add_attr(x / 3600, c(units = "hours since 1970-01-01 00:00:00", cal))
+				else
+					add_attr(x, c(units = "seconds since 1970-01-01 00:00:00", cal))
+			} else if (inherits(x, "Date"))
+				add_attr(as.numeric(x), c(units = "days since 1970-01-01"))
+			else
+				x
+		}
+		lapply(l, f)
+}
+st_as_cdl = function(x) {
+	e = add_units_attr(expand_dimensions(x)) # TODO: handle sfc dimensions
+	d = st_dimensions(x)
+	dimx = dim(x)
+	xy = attr(st_dimensions(x), "raster")$dimensions
+	co = NULL
+	for (i in seq_along(e)) {
+		if (is.null(dim(e[[i]])) && !is.list(e[[i]]))
+			e[[i]] = structure(e[[i]], dim = setNames(length(e[[i]]), names(e)[i]))
+		else if (is_curvilinear(x)) { # curvilinear coordinate matrices:
+			if (names(e)[i] == xy[1]) names(e)[i] = "lon"
+			if (names(e)[i] == xy[2]) names(e)[i] = "lat"
+		} else if (inherits(e[[i]], "sfc")) { # vector data cube:
+			sfc = e[[i]]
+			e[[i]] = structure(seq_along(sfc), dim = setNames(length(sfc), names(e)[i]))
+			e = cdl_add_geometry(e, i, sfc)
+			if (inherits(sfc, "sfc_POINT")) {
+				if (isTRUE(st_is_longlat(x))) {
+					co = c(coordinates = "lat lon")
+					xy = c("lon", "lat") # hack
+				} else {
+					co = c(coordinates = "x y")
+					xy = c("x", "y") # hack
+				}
+			} else {
+				dimx = c(dimx, attr(e, "dims"))
+				co = c(coordinates = "x y")
+				xy = c("x", "y") # hack
+			} 
+			co = c(co, geometry = "geometry")
+		}
+	}
+
+	if (is_curvilinear(x)) {
+		e[["lat"]] = add_attr(e[["lat"]], c(units = "degrees_north", "_CoordinateAxisType" = "Lat", axis = "Y"))
+		e[["lon"]] = add_attr(e[["lon"]], c(units = "degrees_east",  "_CoordinateAxisType" = "Lon", axis = "X"))
+		co = paste(rev(setdiff(names(d), c("x", "y", "lat", "lon"))), "lat lon")
+	} else {
+		if (!any(is.na(xy))) {
+			e[[ xy[1] ]] = add_attr(e[[ xy[1] ]], c(axis = "X"))
+			e[[ xy[2] ]] = add_attr(e[[ xy[2] ]], c(axis = "Y"))
+		}
+	}
+	for (i in seq_along(x))
+		x[[i]] = add_attr(x[[i]], co)
+
+	x = add_units_attr(x) # unclasses x
+	for (i in seq_along(x))
+		if (is.null(names(dim(x[[i]])))) # FIXME: read_ncdf() doesn't name array dim
+			names(dim(x[[i]])) = names(d)
+
+	for (i in names(e)) # copy over dimension values
+		x[[i]] = e[[i]]
+
+	which_dims = function(a, dimx) {
+		m = match(names(dim(a)), names(dimx), nomatch = numeric(0)) - 1
+		if (all(is.na(m)))
+			integer(0)
+		else
+			m
+	}
+	ret = lapply(x, function(a) structure(a, which_dims = which_dims(a, dimx)))
+	structure(ret, which_crs = !(names(ret) %in% names(e)), 
+			  is_numeric = sapply(ret, is.numeric),
+			  dims = attr(e, "dims"))
+}
+cdl_add_geometry = function(e, i, sfc) {
+	stopifnot(inherits(sfc, c("sfc_POINT", "sfc_POLYGON", "sfc_MULTIPOLYGON", "sfc_LINESTRING", "sfc_MULTILINESTRING")))
+
+	if (inherits(sfc, "sfc_POLYGON"))
+		sfc = st_cast(sfc, "MULTIPOLYGON")
+	if (inherits(sfc, "sfc_LINESTRING"))
+		sfc = st_cast(sfc, "MULTILINESTRING")
+
+	cc = st_coordinates(sfc)
+	if (inherits(sfc, c("sfc_MULTIPOLYGON"))) {
+		e$node = structure(seq_len(nrow(cc)), dim = c(node = nrow(cc)))
+		e$x = structure(cc[, 1], dim = c(node = nrow(cc)))
+		e$y = structure(cc[, 2], dim = c(node = nrow(cc)))
+		e$node_count = structure(rle(cc[,"L3"])$lengths, dim = setNames(length(sfc), names(e)[i]))
+		part = rle(cc[,"L3"] * 2 * max(cc[,"L2"]) + 2 * (cc[,"L2"] - 1) + cc[,"L1"])$lengths
+		e$part_node_count = structure(part, dim = c(part = length(part)))
+		e$interior_ring = structure(as.numeric(cc[cumsum(part), "L1"] > 1), dim = c(part = length(part)))
+		attr(e, "dims") = c(node = nrow(cc), part = length(part))
+		e$geometry = add_attr(structure(numeric(0), dim = c("somethingNonEx%isting" = 0)),
+			c(geometry_type = "polygon", node_count = "node_count", node_coordinates = "x y",
+		  	part_node_count = "part_node_count", interior_ring = "interior_ring",
+		  	grid_mapping = if (!is.na(st_crs(sfc))) "crs" else NULL))
+	} else if (inherits(sfc, "sfc_MULTILINESTRING")) { # LINE:
+		e$node = structure(seq_len(nrow(cc)), dim = c(node = nrow(cc)))
+		e$x = structure(cc[, 1], dim = c(node = nrow(cc)))
+		e$y = structure(cc[, 2], dim = c(node = nrow(cc)))
+		e$node_count = structure(rle(cc[,"L2"])$lengths, dim = setNames(length(sfc), names(e)[i]))
+		part = rle((cc[,"L2"] - 1) * max(cc[,"L1"]) + cc[,"L1"])$lengths
+		e$part_node_count = structure(part, dim = c(part = length(part)))
+		attr(e, "dims") = c(node = nrow(cc), part = length(part))
+		e$geometry = add_attr(structure(numeric(0), dim = c("somethingNonEx%isting" = 0)),
+			c(geometry_type = "line", node_count = "node_count", node_coordinates = "x y",
+		  	part_node_count = "part_node_count",
+		  	grid_mapping = if (!is.na(st_crs(sfc))) "crs" else NULL))
+	} else { # POINT:
+		if (ll <- isTRUE(st_is_longlat(sfc))) {
+			e$lon = add_attr(structure(cc[, 1], dim = setNames(nrow(cc), names(e)[i])), 
+						 	c(units = "degrees_north", standard_name = "longitude"))
+			e$lat = add_attr(structure(cc[, 2], dim = setNames(nrow(cc), names(e)[i])), 
+						 	c(units = "degrees_east", standard_name = "latitude"))
+		} else {
+			e$x = structure(cc[, 1], dim = setNames(nrow(cc), names(e)[i]))
+			e$y = structure(cc[, 2], dim = setNames(nrow(cc), names(e)[i]))
+		}
+		e$geometry = add_attr(structure(numeric(0), dim = c("somethingNonEx%isting" = 0)),
+				c(geometry_type = "point", node_coordinates = ifelse(ll, "lon lat", "x y"),
+				grid_mapping = if (!is.na(st_crs(sfc))) "crs" else NULL))
+	}
+	e
+}
+```
+
+Example code snippet from [write_mdim reference](https://r-spatial.github.io/stars/reference/mdim.html)
+```{r}
+set.seed(135)
+m = matrix(runif(10), 2, 5)
+names(dim(m)) = c("stations", "time")
+times = as.Date("2022-05-01") + 1:5
+pts = st_as_sfc(c("POINT(0 1)", "POINT(3 5)"))
+s = st_as_stars(list(Precipitation = m)) |>
+ st_set_dimensions(1, values = pts) |>
+ st_set_dimensions(2, values = times)
+nc = tempfile(fileext=".nc")
+write_mdim(s, nc)
+
+s_read <- read_mdim(nc)
+st_dimensions(s_read)
+s_read 
+```
+How does cdl process the stars object
+```{r}
+cdl_x <- st_as_cdl(x)
+
+cdl_s <- st_as_cdl(s)
+
+cdl_nodate <- st_as_cdl(nodate)
+
+cdl_x$date
+cdl_s$time
+
+cdl_x$lon
+cdl_s$x
+
+cdl_nodate$x
+```
+
+Actual code for read_mdim()
+```{r}
+#' Read or write data using GDAL's multidimensional array API
+#'
+#' Read or write data using GDAL's multidimensional array API
+#' @name mdim
+#' @param filename name of the source or destination file or data source
+#' @param variable name of the array to be read; if `"?"`, a list of array names is returned, with group name as list element names.
+#' @param options character; driver specific options regarding the opening (read_mdim) or creation (write_mdim) of the dataset
+#' @param raster names of the raster variables (default: first two dimensions)
+#' @param offset integer; zero-based offset for each dimension (pixels) of sub-array to read, defaults to 0 for each dimension(requires sf >= 1.0-9)
+#' @param count integer; size for each dimension (pixels) of sub-array to read (default: read all); a value of NA will read the corresponding dimension entirely; counts are relative to the step size (requires sf >= 1.0-9)
+#' @param step integer; step size for each dimension (pixels) of sub-array to read; defaults to 1 for each dimension (requires sf >= 1.0-9)
+#' @param proxy logical; return proxy object?
+#' @param debug logical; print debug info?
+#' @param bounds logical or character: if \code{TRUE} tries to infer from "bounds" attribute; if character, 
+#' named vector of the form \code{c(longitude="lon_bnds", latitude="lat_bnds")} with names dimension names
+#' @param curvilinear control reading curvilinear (geolocation) coordinate arrays; if \code{NA} try reading the x/y dimension names; if character, defines the arrays to read; if \code{FALSE} do not try; see also \link{read_stars}
+#' @param normalize_path logical; if \code{FALSE}, suppress a call to \link{normalizePath} on \code{filename}
+#' @details it is assumed that the first two dimensions are easting and northing
+#' @param ... ignored
+#' @seealso \link[sf]{gdal_utils}, in particular util \code{mdiminfo} to query properties of a file or data source containing arrays
+#' @export
+read_mdim = function(filename, variable = character(0), ..., options = character(0), 
+					 raster = NULL, offset = integer(0), count = integer(0), step = integer(0), proxy = FALSE, 
+					 debug = FALSE, bounds = TRUE, curvilinear = NA, normalize_path = TRUE) {
+
+	stopifnot(is.character(filename), is.character(variable), is.character(options))
+	if (normalize_path)
+		filename = enc2utf8char(maybe_normalizePath(filename, np = normalize_path))
+	ret = gdal_read_mdim(filename, variable, options, rev(offset), rev(count), rev(step), proxy, debug)
+
+	if (identical(variable, "?"))
+		return(ret) # RETURNS
+
+	if (length(ret$dimensions) == 1 && length(ret$array_list) == 1 && is.data.frame(ret$array_list[[1]]))
+		return(ret$array_list[[1]]) ## composite data: RETURNS
+
+	ret = recreate_geometry(ret)
+	if (isTRUE(bounds) || is.character(bounds))
+		ret$dimensions = mdim_use_bounds(ret$dimensions, filename, bounds)
+
+	create_units = function(x) {
+		u = attr(x, "units")
+		x = structure(x, units = NULL) # remove attribute
+		if (is.null(u) || u %in% c("", "none"))
+			x
+		else {
+			if (!is.null(a <- attr(x, "attributes")) && !is.na(cal <- a["calendar"]) && 
+						cal %in% c("360_day", "365_day", "noleap"))
+				get_pcict(x, u, cal)
+			else {
+				days_since = grepl("days since", u)
+				u = try_as_units(u)
+				if (!inherits(u, "units")) # FAIL:
+					x
+				else {
+					units(x) = u
+					if (days_since && inherits(d <- try(as.Date(x), silent = TRUE), "Date")) 
+						d
+					else if (inherits(p <- try(as.POSIXct(x), silent = TRUE), "POSIXct"))
+						p
+					else
+						x
+				}
+			}
+		}
+	}
+	l = rev(lapply(ret$dimensions, function(x) {
+			   if (inherits(x, "sfc")) x else create_units(x$values[[1]])
+			}))
+	if (length(offset) != 0 || length(step) != 0 || length(count) != 0) {
+		if (length(offset) == 0)
+			offset = rep(0, length(l))
+		if (length(step) == 0)
+			step = rep(1, length(l))
+		ll = lengths(lapply(l, as.list)) # take care of dimensions of class intervals
+		if (length(count) == 0)
+			count = floor((ll - offset)/step)
+		else if (any(a <- is.na(count)))
+			count[a] = floor((ll[a] - offset[a])/step[a])
+		for (i in seq_along(l)) {
+			l[[i]] = l[[i]][seq(from = offset[i]+1, length.out = count[i], by = step[i])]
+		}
+	}
+
+	# create dimensions table:
+	sf = any(sapply(l, function(x) inherits(x, "sfc")))
+	# FIXME: i %in% 1:2 always the case?
+	raster_dims = match_raster_dims(names(l))
+	d = mapply(function(x, i) create_dimension(values = x, is_raster = !sf && i %in% raster_dims,
+									   point = ifelse(length(x) == 1, TRUE, NA)),
+			   l, seq_along(l), SIMPLIFY = FALSE)
+	if (is.null(raster)) {
+		raster = if (sf)
+					get_raster(dimensions = rep(NA_character_,2))
+				else
+					get_raster(dimensions = names(d)[raster_dims])
+	} else
+		raster = get_raster(dimensions = raster)
+	dimensions = create_dimensions(d, raster = raster)
+
+	# handle array units:
+	for (i in seq_along(ret$array_list))
+		if (nchar(u <- attr(ret$array_list[[i]], "units")) && inherits(u <- try_as_units(u), "units"))
+			units(ret$array_list[[i]]) = u
+	clean_units = function(x) { 
+		if (identical(attr(x, "units"), "")) 
+			structure(x, units = NULL)
+		else
+			x
+	}
+
+	# create return object:
+	if (proxy) {
+		lst = lapply(ret$array_list, function(x) filename)
+		st = st_stars_proxy(lst, dimensions, NA_value = NA_real_, resolutions = NULL, class = "mdim")
+		if (!is.null(ret$srs))
+			st_set_crs(st, ret$srs)
+		else
+			st
+	} else { 
+		lst = lapply(ret$array_list, function(x) structure(clean_units(x), dim = rev(dim(x))))
+		st = st_stars(lst, dimensions)
+		if (is.null(ret$srs) || is.na(ret$srs)) {
+			if (missing(curvilinear) || is.character(curvilinear)) { # try curvilinear:
+				xy = raster$dimensions
+				ll = curvilinear
+				if (is.character(curvilinear)) {
+					if (is.null(names(curvilinear)))
+						names(curvilinear) = xy[1:2]
+					ret = try(st_as_stars(st, curvilinear = curvilinear), silent = TRUE)
+					if (inherits(ret, "stars"))
+						st = ret
+				}
+				if (!is_curvilinear(st) &&
+					inherits(x <- try(read_mdim(filename, ll[1], curvilinear = FALSE), silent = TRUE), "stars") &&
+					inherits(y <- try(read_mdim(filename, ll[2], curvilinear = FALSE), silent = TRUE), "stars") &&
+						identical(dim(x)[xy], dim(st)[xy]) && identical(dim(y)[xy], dim(st)[xy]))
+					st = st_as_stars(st, curvilinear = setNames(list(x, y), xy))
+			}
+			st
+		} else
+			st_set_crs(st, ret$srs)
+	}
+}
+
+try_as_units = function(u) {
+	un = try(suppressWarnings(as_units(u)), silent = TRUE)
+	if (inherits(un, "try-error")) # try without ^:
+		un = try(suppressWarnings(as_units(gsub("^", "", u, fixed = TRUE))), silent = TRUE)
+	if (inherits(un, "try-error")) # try without **
+		un = try(suppressWarnings(as_units(gsub("**", "", u, fixed = TRUE))), silent = TRUE)
+	if (inherits(un, "try-error") && u != "none") {
+		warning(paste("ignoring unrecognized unit:", u), call. = FALSE)
+		NULL
+	} else
+		un
+}
+
+create_units = function(x) {
+		u = attr(x, "units")
+		x = structure(x, units = NULL) # remove attribute
+		if (is.null(u) || u %in% c("", "none"))
+			x
+		else {
+			if (!is.null(a <- attr(x, "attributes")) && !is.na(cal <- a["calendar"]) && 
+						cal %in% c("360_day", "365_day", "noleap"))
+				get_pcict(x, u, cal)
+			else {
+				days_since = grepl("days since", u)
+				u = try_as_units(u)
+				if (!inherits(u, "units")) # FAIL:
+					x
+				else {
+					units(x) = u
+					if (days_since && inherits(d <- try(as.Date(x), silent = TRUE), "Date")) 
+						d
+					else if (inherits(p <- try(as.POSIXct(x), silent = TRUE), "POSIXct"))
+						p
+					else
+						x
+				}
+			}
+		}
+}
+
+create_dimension = function(from = 1, to, offset = NA_real_, delta = NA_real_, 
+		refsys = NA_character_, point = NA, values = NULL, is_raster = FALSE)  {
+
+	example = NA
+
+	if (! is.null(values)) { # figure out from values whether we have sth regular:
+		from = 1
+		to = length(values)
+		if (!(is.character(values) || is.factor(values)) && is.atomic(values)) { 
+			if (! all(is.finite(values)))
+				warning("dimension value(s) non-finite")
+			else {
+				if (regular_intervals(values)) {
+					offset = values[1]
+					if (length(values) > 1) {
+						delta = diff(values[1:2])
+					# shift half grid cell size if x or y raster dim cell midpoints:
+						if (is_raster)
+							offset = offset - 0.5 * delta
+					}
+					values = NULL
+					example = offset
+				} else
+					example = values
+			}
+		}
+		if (inherits(values, "intervals"))
+			example = values$start
+
+		# refsys:
+		if (inherits(example, "POSIXct"))
+			refsys = "POSIXct"
+		else if (inherits(example, "Date"))
+			refsys = "Date"
+		else if (inherits(example, "PCICt"))
+			refsys = paste0("PCICt_", attr(example, "cal"))
+		else if (inherits(example, "units"))
+			refsys = "udunits"
+
+		if (inherits(values, "sfc")) {
+			point = inherits(values, c("sfc_POINT", "sfc_MULTIPOINT"))
+			if (!is.na(st_crs(values)) && is.na(refsys)) # inherit:
+				refsys = st_crs(values)
+		}
+		if (is.numeric(values) && (is.na(point) || !point)) {
+			values = if (is_raster)
+					set_dimension_values(centers = values)
+				else
+					set_dimension_values(start = values)
+		}
+	}
+	structure(list(from = unname(from), to = unname(to), offset = unname(offset), 
+		delta = unname(delta), refsys = refsys, point = unname(point), values = values), 
+		class = "dimension")
+}
+
+regular_intervals = function(x, epsilon = 1e-10) {
+	if (length(x) <= 1)
+		FALSE
+	else {
+		ud = if (is.atomic(x) && (is.numeric(x) || inherits(x, c("POSIXt", "Date", "PCICt"))))
+				unique(diff(x))
+			else {
+				if (inherits(x, "intervals") && identical(tail(x$end, -1), head(x$start, -1)))
+					x$end - x$start
+				else
+					return(FALSE)
+			}
+		ud = as.numeric(ud)
+		isTRUE((abs(diff(range(ud)) / mean(ud))) < epsilon)
+	}
+}
+set_dimension_values = function(..., start = NULL, end = NULL, centers = NULL) {
+	if (!is.null(centers) && (!is.null(start) || !is.null(end)))
+		stop("if centers is given, start and end should not be given")
+	if (!is.null(centers)) {
+		l = length(centers)
+		if (l <= 1)
+			stop("cannot derive cell boundaries from a single center: specify start and end")
+		d = diff(centers)
+		start = c(centers - 0.5 * c(d[1], d))
+		end = c(start[-1], centers[l] + 0.5 * d[l-1])
+	} else if (missing(end)) {
+		l = length(start)
+		end = if (l == 1)
+				NA_real_ #stop("cannot infer end values from a single start value")
+			else
+				c(start[-1], start[l] + diff(c(start[l-1], start[l])))
+	}
+	make_intervals(start = start, end = end)
+}
+```
+
+Bootlegged version to diagnose
+```{r}
+filename = "out.nc"
+filename2 = "outnodate.nc"
+variable = character(0)
+options = character(0)
+raster = NULL
+offset = integer(0)
+count = integer(0)
+step = integer(0)
+proxy = FALSE
+debug = FALSE
+bounds = TRUE
+
+ret = gdal_read_mdim(filename, variable, options, rev(offset), rev(count), rev(step), proxy, debug)
+ret2 = gdal_read_mdim(filename2, variable, options, rev(offset), rev(count), rev(step), proxy, debug)
+
+l = rev(lapply(ret$dimensions, function(x) {
+			   if (inherits(x, "sfc")) x else create_units(x$values[[1]])
+		  }))
+l2 = rev(lapply(ret2$dimensions, function(x) {
+			   if (inherits(x, "sfc")) x else create_units(x$values[[1]])
+		  }))
+
+### Possibly important
+if (length(offset) != 0 || length(step) != 0 || length(count) != 0) {
+	if (length(offset) == 0)
+		offset = rep(0, length(l))
+	if (length(step) == 0)
+		step = rep(1, length(l))
+	ll = lengths(lapply(l, as.list)) # take care of dimensions of class intervals
+	if (length(count) == 0)
+		count = floor((ll - offset)/step)
+	else if (any(a <- is.na(count)))
+		count[a] = floor((ll[a] - offset[a])/step[a])
+	for (i in seq_along(l)) {
+		l[[i]] = l[[i]][seq(from = offset[i]+1, length.out = count[i], by = step[i])]
+	}
+}
+
+# create dimensions table GOES WRONG HERE.
+raster_dims = 1:2
+d = mapply(function(x, i) create_dimension(values = x, is_raster = i %in% raster_dims,
+								   point = ifelse(length(x) == 1, TRUE, NA)),
+		   l, seq_along(l), SIMPLIFY = FALSE)
+d2 = mapply(function(x, i) create_dimension(values = x, is_raster = i %in% raster_dims,
+								   point = ifelse(length(x) == 1, TRUE, NA)),
+		   l2, seq_along(l2), SIMPLIFY = FALSE)
+
+d$lon
+
+d2$x
+```
+
+Dig into create_dimension
+```{r}
+from = 1
+values = l[[1]]
+
+create_dimension = function(from = 1, to, offset = NA_real_, delta = NA_real_, 
+		refsys = NA_character_, point = NA, values = NULL, is_raster = FALSE)  {
+
+	example = NA
+
+	if (! is.null(values)) { # figure out from values whether we have sth regular:
+		from = 1
+		to = length(values)
+		if (!(is.character(values) || is.factor(values)) && is.atomic(values)) { 
+			if (! all(is.finite(values)))
+				warning("dimension value(s) non-finite")
+			else {
+				if (regular_intervals(values)) {
+					offset = values[1]
+					if (length(values) > 1) {
+						delta = diff(values[1:2])
+					# shift half grid cell size if x or y raster dim cell midpoints:
+						if (is_raster)
+							offset = offset - 0.5 * delta
+					}
+					values = NULL
+					example = offset
+				} else
+					example = values
+			}
+		}
+		if (inherits(values, "intervals"))
+			example = values$start
+
+		# refsys:
+		if (inherits(example, "POSIXct"))
+			refsys = "POSIXct"
+		else if (inherits(example, "Date"))
+			refsys = "Date"
+		else if (inherits(example, "PCICt"))
+			refsys = paste0("PCICt_", attr(example, "cal"))
+		else if (inherits(example, "units"))
+			refsys = "udunits"
+
+		if (inherits(values, "sfc")) {
+			point = inherits(values, c("sfc_POINT", "sfc_MULTIPOINT"))
+			if (!is.na(st_crs(values)) && is.na(refsys)) # inherit:
+				refsys = st_crs(values)
+		}
+		if (is.numeric(values) && (is.na(point) || !point)) {
+			values = if (is_raster)
+					set_dimension_values(centers = values)
+				else
+					set_dimension_values(start = values)
+		}
+	}
+	structure(list(from = unname(from), to = unname(to), offset = unname(offset), 
+		delta = unname(delta), refsys = refsys, point = unname(point), values = values), 
+		class = "dimension")
+}
+```
+
+```{r}
+regular_intervals(l[[1]]) # FALSE
+
+regular_intervals(l2[[1]]) # TRUE
+
+riv = l[[1]]
+ud <- unique(diff(riv)) 
+isTRUE((abs(diff(range(ud)) / mean(ud))) < 1e-10)
+ud_raw <- st_get_dimension_values(x, "lon") |> diff() |> unique()
+isTRUE((abs(diff(range(ud_raw)) / mean(ud_raw))) < 1e-10)
+
+
+```
+
+SO the issue is that the values of the data are corrupted enough on save that the difference between variables stops being a clean 1/12 and regular_intervals() incorrectly parses those values as discrete. gdal_write_mdim is the problem 🥲
+
+Solution -- specify additional variables to manually set the offset...
+OR be like ben and write our own wrapper to reassign the dimensions of those variables. 
+
+```{r}
+suppressWarnings({
+  write_mdim(original, "out_as_dbl.nc", as_float = FALSE)
+  read_in <- read_mdim("out_as_dbl.nc")
+})
+st_dimensions(original)
+st_dimensions(read_in)
+
+```
+
+
+
