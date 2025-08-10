@@ -44,7 +44,7 @@ threshold_vs_performance <- function(v,
     if (calctype == "confmat") {
     threshold_df |>
       group_by(wkf_id) |>
-      group_map(~{count(.x, type) |> mutate(.y)}) |>
+      group_map(~{dplyr::count(.x, type) |> mutate(.y)}) |>
       bind_rows() |>
       group_by(type) |>
       summarize(mean_count = mean(n)) |>

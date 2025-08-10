@@ -4,16 +4,16 @@ source("generate_data_cubes.R")
 
 v <- "je.0.00"
 
-date_start = as.Date("2001-01-01")
+date_start = as.Date("1993-01-01")
 date_end = as.Date("2019-11-11")
-date_end = as.Date("2001-12-31")
+date_end = as.Date("1993-12-31")
 
 res <- generate_yearly_cubes(v, 
                              date_start, 
                              date_end, 
-                             date_downsample = 3,
-                             fold_subset = 2,
-                             recovery = FALSE,
+                             date_downsample = NULL,
+                             fold_subset = NULL,
+                             add = TRUE,
                              verbose = TRUE)
 
 if (FALSE) {

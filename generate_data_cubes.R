@@ -1,4 +1,5 @@
 source("data_preparation/derive_calculated_variables.R")
+source("io_stars.R")
 
 ############ DATA PROCESSING HELPER
 
@@ -70,83 +71,7 @@ apply_quantile_preds <- function(wkfs, data,
 }
 
 
-########### DATA WRITE/READ HELPERS
-
-#' Saves a quantile stars object to file if desired
-#' Saves each layer individually, plus a dimensions object
-#' @param quantile_stars stars object with quantile attributes: 5%, 50%, etc
-#' @param save_path str, path to folder OR NULL for no save
-#' @param filename_prefix str, prefix for file. Ignored if no save
-#' @return TRUE if saved successfully, input if no save
-write_quantile_stars <- function(quantile_stars, 
-                                 save_path = NULL, filename_prefix = NULL) {
-  
-  if(is.null(save_path)) {return(quantile_stars)}
-  
-  # Helper, saves a single layer
-  save_layer <- function(quantile_name, index) {
-    filename <- paste0(filename_prefix, "_", gsub("%", "", quantile_name), ".tif")
-    write_stars(quantile_stars, file.path(save_path, filename), layer = index)
-  }
-  
-  names(quantile_stars) |>
-    iwalk(save_layer)
-  
-  st_dimensions(quantile_stars) |>
-    saveRDS(file = file.path(save_path, paste0(filename_prefix, "_dimensions.rds")))
-  
-  TRUE
-}
-
-#' Reads quantile stars objects from file
-#' @param folder_path str, file path to folder with saved quantile stars
-#' @return quantile stars read in from file, either named list or single item
-read_quantile_stars <- function(folder_path) {
-  # Reads in files and splits up by individual stars object
-  if (!dir.exists(folder_path)) {stop("Folder does not exist.")}
-  tif_files <- list.files(folder_path, pattern = "*.tif")
-  tif_files_groups <- split(tif_files, sub("_\\d+.tif", "", tif_files))
-  dims_files <- list.files(folder_path, pattern = "*_dimensions.rds")
-  names(dims_files) <- sub("_dimensions.rds", "", dims_files)
-  
-  #' Helper: reads in all stars objects and collapses into one
-  read_quantile_star <- function(file_prefix) {
-    quantile_star <- file.path(folder_path, tif_files_groups[[file_prefix]]) |>
-      read_stars()
-    # Rearrange layers in increasing order and reformat names to XX% format
-    quantile_layers_numeric <- sub(".tif", "", names(quantile_star)) |> as.numeric()
-    sort_order <- order(quantile_layers_numeric)
-    quantile_star <- quantile_star[sort_order] |>
-      setNames(paste0(quantile_layers_numeric[sort_order], "%"))
-    
-    # Add back in date information
-    if (file_prefix %in% names(dims_files)) {
-      dims_specs <- readRDS(file.path(folder_path, dims_files[[file_prefix]]))
-      
-      # Have to use different functions depending on if we're adding back the date band or overriding the corrupted one
-      is_single_date <- length(st_dimensions(quantile_star)) == 2
-      if (is_single_date) {
-        quantile_star <- st_redimension(quantile_star, new_dims = dims_specs)
-      } else {
-        st_dimensions(quantile_star) <- dims_specs
-      }
-      
-    } else {
-      warning("Stars object ", file_prefix, " did not save with dimension specifications. Date dimension likely missing or incomplete.")
-    }
-    
-    quantile_star
-  }
-  
-  quantile_stars <- unique(names(tif_files_groups)) |>
-    map(read_quantile_star)
-  
-  if(length(quantile_stars) == 1) {
-    quantile_stars <- quantile_stars[[1]]
-  }
-
-  quantile_stars
-}
+########### COPERNICUS RETRIEVAL AND PROCESSING HELPERS
 
 #' Retrieves appropriate dynamic copernicus variables from Copernicus
 #' Issue: Assumes that physical variables must exist. 
