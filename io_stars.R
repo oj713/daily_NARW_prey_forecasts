@@ -104,45 +104,45 @@ recover_interval_dims <- function(stars_obj, true_offset = 1/12) {
 
 #' Saves a quantile stars object to file if desired as netCDF
 #' @param quantile_stars stars object with quantile attributes: 5%, 50%, etc
-#' @param save_path str, path to folder OR NULL for no save
-#' @param filename_prefix str, prefix for file. Ignored if no save
+#' @param save_path str, file path to save to OR NULL for no save
 #' @param as_float bool, save raster dimensions as floats or doubles? 
 #' @return TRUE if saved successfully, input if no save
 write_quantile_stars <- function(quantile_stars, 
-                                 save_path = NULL, filename_prefix = NULL, 
+                                 save_path = NULL, 
                                  as_float = TRUE) {
   
   if (is.null(save_path)) {return(quantile_stars)}
-  
-  filepath <- file.path(save_path, paste0(filename_prefix, ".nc"))
+  if (substr(save_path, nchar(save_path)-2, nchar(save_path)) != ".nc") {
+    stop("Incorrect file extension, requires .nc")
+  }
   
   suppressWarnings({
-    stars::write_mdim(quantile_stars, filepath, as_float = as_float)
+    stars::write_mdim(quantile_stars, save_path, as_float = as_float)
   })
   
   TRUE
 }
 
 #' Reads quantile stars objects from file
-#' Makes call to read_quantile_stars_old if appropriate, retire eventually
-#' @param folder_path str, file path to folder with saved quantile stars
-#' @param subgroup_name str, name of subgroup stars to read
+#' Makes call to read_quantile_stars_old if appropriate, to retire eventually
+#' @param file_path str, file path to saved quantile stars object/folder
 #' @return stars object
-read_quantile_stars <- function(folder_path, subgroup_name) {
-  if (!dir.exists(folder_path)) {stop("Invalid folder path.")}
+read_quantile_stars <- function(file_path) {
+  is_folder <- dir.exists(file_path)
+  is_file <- file.exists(file_path)
   
-  file_nc_path <- file.path(folder_path, paste0(subgroup_name, ".nc"))
-  file_folder_path <- file.path(folder_path, subgroup_name)
-  
-  # Reading in standard nc object
-  if (file.exists(file_nc_path)) {
-    read_mdim(file_nc_path) |>
+  # Is the path valid?
+  if (!is_folder && !is_file) {
+    stop("File doesn't exist.")
+  # Is the path a .nc object to read in? 
+  } else if (is_file) {
+    if (substr(file_path, nchar(file_path)-2, nchar(file_path)) != ".nc") {
+      stop("Incorrect file extension, requires .nc")
+    }
+    read_mdim(file_path) |>
       recover_interval_dims()
-  # Reading in old multifile TIF format
-  } else if (dir.exists(file_folder_path)) {
-    read_quantile_stars_old(file_folder_path)
-  # Error
+  # Is the path a folder containing multifile TIF stars object (deprecated)?
   } else {
-    stop("No matching subgroup identified.")
+    read_quantile_stars_old(file_path)
   }
 }
