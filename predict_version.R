@@ -5,14 +5,14 @@ source("generate_prediction_cubes.R")
 v <- "je.0.00"
 
 date_start = as.Date("1993-01-01")
-date_end = as.Date("2019-11-11")
+date_end = as.Date("2019-12-31")
 #date_end = as.Date("1993-8-31")
 
 res <- generate_yearly_cubes(v, 
                              date_start, 
                              date_end, 
-                             date_downsample = NULL,
-                             fold_subset = 2,
+                             date_downsample = 2,
+                             fold_subset = 15,
                              add = TRUE,
                              verbose = TRUE)
 

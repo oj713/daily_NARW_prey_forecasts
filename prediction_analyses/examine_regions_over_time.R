@@ -26,63 +26,82 @@ ggplot() +
   labs(x = "lon", y = "lat", fill = "Region")
 
 ## Plot ecomon dataset over region and time
-ecomon <- data_from_config(config)
+season_vector <- c(1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 1)
+ecomon <- data_from_config(config) |>
+  filter(date < as.Date("2014-12-31"))
 ecomon_sf <- st_as_sf(ecomon, crs = 4326, coords = c("lon", "lat")) |>
   st_join(regions) |>
   na.omit() |>
   mutate(month = lubridate::month(date), 
          year = lubridate::year(date),
          patch = as.numeric(patch) - 1)
+ecomon_sf <- ecomon_sf |>
+  mutate(season = season_vector[month],
+         yearmonth = year + season/5)
 
-over_time <- ecomon_sf |>
-  group_by(year, month, id) |>
-  summarize(meanpatch = mean(patch))
+over_time_yearmonth <- ecomon_sf |>
+  group_by(yearmonth, id) |>
+  summarize(meanpatch = mean(patch), 
+            numentries = n())
 
-over_time_yearly <- ecomon_sf |> 
-  group_by(year, id) |>
-  summarize(meanpatch = mean(patch))
+over_time_month <- ecomon_sf |>
+  group_by(month, id) |>
+  summarize(meanpatch = mean(patch), 
+            numentries = n())
 
-ggplot(over_time_yearly, 
-       aes(x = year, y = meanpatch)) + 
+ggplot(over_time_month, 
+       aes(x = month, y = meanpatch)) + 
   facet_wrap(~id) +
-  geom_line()
+  geom_line() + 
+  geom_point(aes(size = numentries)) + 
+  theme_bw()
 
 ## Plot coper_stars data over region and time
-pred_root <- v_path(v, "preds", "3day_resolution_2fold")
-years <- list.files(pred_root) |> as.numeric()
-
-regions <- st_read("prediction_analyses/region_shapefiles/johnson2024_regions.shp") |>
-  st_make_valid() |>
-  st_transform(crs = 4326)
+pred_root <- v_path(v, "preds", "2day_resolution_15fold")
+predfiles <- list.files(pred_root, full.names = TRUE)
+predfiles <- predfiles[-length(predfiles)]
+names(predfiles) <- 1993:2014
 
 process_year <- function(year) {
   # Load and prepare the stars object
-  year_preds <- read_quantile_stars(file.path(pred_root, year))[[1]] |>
-    st_set_crs(4326)
+  year_preds <- read_quantile_stars(predfiles[year])
   
   # Aggregate spatially by region
-  summary_stars <- aggregate(year_preds, by = regions, FUN = mean, na.rm = TRUE)
+  year_preds <- aggregate(year_preds, by = regions, FUN = mean, na.rm = TRUE)
   
   # Convert stars object to data.frame, keep only region ID and band values
-  summary_df <- as.data.frame(summary_stars, long = TRUE) |>
-    setNames(c("geometry", "band", "average"))
-    dplyr::select(region_id = , band, value = 3)  # replace 'region_column_name' and '3' as appropriate
+  summary_df <- as.data.frame(year_preds, long = TRUE)
+  summary_df <- summary_df |> 
+    mutate(month = lubridate::month(date))
   
-  # Collapse across bands (mean per region)
-  summary_wide <- summary_df |>
-    group_by(region_id) |>
-    summarize(mean_value = mean(value, na.rm = TRUE), .groups = "drop") |>
-    pivot_wider(names_from = region_id, values_from = mean_value)
+  over_time_month_stars <- summary_df |>
+    group_by(month, geometry) |>
+    summarize(meanpatch = mean(`50%`), 
+              numentries = n()) |>
+    left_join(regions) |>
+    select(-geometry)
   
-  # Add year column
-  summary_wide <- summary_wide |>
-    mutate(year = year) |>
-    relocate(year)
-  
-  return(summary_wide)
+  rm(year_preds, summary_df)
+  gc()
+  over_time_month_stars
 }
 
+all_years <- names(predfiles) |>
+  map(process_year) |>
+  bind_rows()
 
+coperpredres <- all_years |>
+  group_by(month, id) |>
+  summarize(meanpred = weighted.mean(meanpatch, numentries),
+            totalpredcount = sum(numentries), .groups = "keep")
 
-
+ggplot() +
+  geom_line(data = over_time_month, aes(x = month, y = meanpatch)) + 
+  geom_point(data = over_time_month, aes(x = month, y = meanpatch, size = numentries)) +
+  geom_line(data = coperpredres |> filter(id %in% c("MAB", "GoM", "WSS")), 
+            aes(x = month, y = 1-meanpred), col = "red") +
+  facet_wrap(~id) +
+  geom_line() + 
+  theme_bw() + 
+  labs(x = "Month", y = "Mean patch value / patch prediction", size = "No. Records")
 
