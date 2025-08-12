@@ -105,3 +105,11 @@ ggplot() +
   theme_bw() + 
   labs(x = "Month", y = "Mean patch value / patch prediction", size = "No. Records")
 
+
+
+
+
+
+
+
+
