@@ -1,3 +1,4 @@
+cat("Kicking off predictions...\n")
 setwd("/mnt/ecocast/projects/students/ojohnson/daily-forecasts")
 species <- "cfin"
 source("setup.R")
@@ -12,8 +13,8 @@ date_end = as.Date("2019-12-31")
 res <- generate_yearly_cubes(v, 
                              date_start, 
                              date_end, 
-                             date_downsample = 2,
-                             fold_subset = 15,
+                             date_downsample = NULL,
+                             fold_subset = NULL,
                              add = TRUE,
                              verbose = TRUE, 
                              as_float = FALSE)
