@@ -172,7 +172,7 @@ response_curves <- function(v,
     })
     
     # Predicting, binding value
-    model_preds <- apply_quantile_preds(wkfs, 
+    model_preds <- apply_quantile_preds(v_wkfs, 
                                         in_df, 
                                         desired_quants = c(.025, .5, .975), 
                                         na.ignore = FALSE) |>
@@ -193,7 +193,7 @@ response_curves <- function(v,
     bind_rows()
   
   ### Variable importance
-  vimp <- (wkfs[[1]] |>
+  vimp <- (v_wkfs[[1]] |>
              extract_fit_parsnip() |>
              vip::vi_model())$Variable
   if (has_month) {

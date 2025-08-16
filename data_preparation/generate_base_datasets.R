@@ -138,7 +138,9 @@ match_abund_allcoper <- function(spec_name, abundance_df, verbose = TRUE) {
   returnable_mac <- 
     bind_cols(st_coordinates(matched_abund_allcoper),
               st_drop_geometry(matched_abund_allcoper)) |>
-    rename(lon = X, lat = Y)
+    mutate(day_of_year = lubridate::yday(date)) |>
+    rename(lon = X, lat = Y) |>
+    na.omit()
   
   
   filepath <- file.path(get_root(spec_name), "input_data", paste0(spec_name, "_copernicus_matched.csv.gz"))

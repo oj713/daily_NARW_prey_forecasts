@@ -1,10 +1,14 @@
-species <- "jellyfish"
+species <- "cfin"
 source("setup.R")
+# Creation
 source("data_preparation/data_from_config.R")
 source("build_workflows.R")
+# Analyses
+source("model_analyses/analysis_functions_main.R")
+source("generate_prediction_cubes.R")
 
 # Assumes yaml_maker.R has already been run
-v <- "je.0.00"
+v <- "cf.0.01"
 config <- read_config(v)
 if (config$training_data$species != species) {
   stop("Species of version is not the same as session defined species.")
@@ -22,3 +26,17 @@ mec_folds <- mec |>
 
 # Creating workflow object & performance summary
 mec_wkfs <- init_v_wkf(config, mec_folds)
+
+### Analyses
+testing <- get_v_testing(v)
+threshold <- config$training_data$species_data$threshold$pre
+
+# Calls to analysis functions
+response_curves(v, mec_wkfs, mec, same_y = FALSE, save = TRUE)
+
+auc_by_month(v, testing, save = TRUE)
+
+threshold_vs_performance(v, testing, save = TRUE)
+
+pred_vs_abund(v, testing, threshold, save = TRUE)
+
