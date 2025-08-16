@@ -1,3 +1,4 @@
+setwd("/mnt/ecocast/projects/students/ojohnson/daily-forecasts")
 species <- "cfin"
 source("setup.R")
 source("generate_prediction_cubes.R")
