@@ -1,16 +1,11 @@
+species <- "jellyfish"
 source("setup.R")
 library(corrplot)
 library(lubridate)
 
-root <- "/mnt/ecocast/projectdata/students/ojohnson/copernicus/input_data"
-#' Saves exploratory data analysis pdf to file, wrapper of save_pdf_ecocast
-save_eda <- function(obj, filename) {
-  save_pdf_ecocast(obj, filename, root)
-  obj
-}
-
-cfin_data <- get_input_data("mec_bathy_BR.csv.gz")
-jellydata <- get_input_data("jelly_phys_bgc_bathy_ET_chfc.csv.gz")
+data <- get_input_data(paste0(species, "_copernicus_matched.csv.gz"))
+ignore_vars <- c("lon", "lat", "date", "mask")
+var_cols <- colnames(data)[!colnames(data) %in% ignore_vars]
 
 #' Plots each variable on a map and saves result to file
 #' @param data df, covariate dataset. Required columns lon, lat
@@ -26,28 +21,28 @@ get_variable_plots <- function(data, col_names, filename = "variable_plots") {
       scale_color_viridis() +
       geom_point(aes(col = get(var)), cex = .4, alpha = .5) + 
       labs(col = var, x = "Longitude", y = "Latitude") + 
-      ggtitle(paste("Matched Ecomon/Copernicus:", var))
+      ggtitle(paste0("Matched ", species, "/Copernicus: ", var))
   }
   
   col_names |>
     map(plot_variable) |> 
-    save_eda(filename)
+    save_eda_ecocast(filename)
   
   TRUE
 }
 
 #' Retrieves correlation matrix and saves to file
 #' @param data df, covariate dataset. Required columns lon, lat
-#' @param col_indices numeric, vector of data column indices to plot
+#' @param cols numeric or char, columns to plot
 #' @param filename str, filename minus .pdf ending
 #' @return plot
-get_correlation_matrix <- function(data, col_indices, filename = "variable_corrs") {
-  correlation_matrix <- data[col_indices] |>
+get_correlation_matrix <- function(data, cols, filename = "variable_corrs") {
+  correlation_matrix <- data[cols] |>
     cor()
   
-  corrplot(correlation_matrix, addCoef.col = "black", 
+  corrplot(correlation_matrix, addCoef.col = "black", number.cex = .6,
            method = "circle", type = "full", order = "alphabet") |>
-    save_eda(filename)
+    save_eda_ecocast(filename)
 }
 
 #' Create abundance vs. variable value scatterplots

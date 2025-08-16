@@ -1,9 +1,9 @@
-v_num <- "0.00"
-overwrite <- TRUE
+v_num <- "0.01"
+overwrite <- FALSE
 species <- c("jellyfish", "cfin", "pseudocalanus", "centrophages")[[2]]
 v_name <- paste0(substr(species, 1, 2), ".", v_num)
 
-note <- "Initial cfin model. Indifferent to tuning, day length time representation, all physical variables"
+note <- "Same as 0.00, but updated code to use revised training dataset."
 
 source("setup.R")
 

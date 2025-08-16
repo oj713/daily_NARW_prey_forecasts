@@ -16,7 +16,7 @@ suppressPackageStartupMessages(
 #' Creates a new set of directories if needed.
 #' @param species str, species name
 #' @return root path for rest of session
-set_root <- function(species) {
+get_root <- function(species) {
   root <- file.path("/mnt/ecocast/projectdata/students/ojohnson/copernicus", species)
   if (!dir.exists(root)) {
     user_input <- readline(paste0("Create new directory for ", species, "? (y/n) "))
@@ -35,7 +35,7 @@ set_root <- function(species) {
 if (!exists("species")) {
   species <- readline("Need to define 'species' before running setup. Enter species: ")
 }
-root <- set_root(species)
+root <- get_root(species)
 
 ################## GENERIC DATA RETRIEVAL AND SAVE HELPERS
 
@@ -112,7 +112,9 @@ get_coper_info <- function(region = c("chfc", "nwa", "world")[[1]],
   bbox <- st_bbox(example_layer)
   crs <- st_crs(example_layer)
   
-  list(coper_path = coper_path, 
+  list(type = type, 
+       region = region,
+       coper_path = coper_path, 
        date_range = date_range,
        bbox = bbox,
        meta_db = coper_DB)

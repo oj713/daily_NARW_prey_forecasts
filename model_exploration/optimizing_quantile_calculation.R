@@ -1,8 +1,8 @@
-species <- "jellyfish"
+species <- "cfin"
 source("setup.R")
 source("generate_data_cubes.R")
 
-v <- "je.0.00"
+v <- "cf.0.00"
 #### Data Preparation
 testdates <- seq(as.Date("2015-07-15"), by = "days", length.out = 10)
 config <- read_config(v)
@@ -18,7 +18,7 @@ coper_data$bathy_depth <- coper_bathy
 
 # Converting to tibble, and adding calculated variables
 coper_data <- as_tibble(coper_data)
-coper_data <- mutate(coper_data, date = testdate, .after = y)
+coper_data <- mutate(coper_data, date = as.Date(time), .after = y)
 coper_data <- coper_data |>
   rename(lon = x, lat = y) |>
   mutate(day_of_year = lubridate::yday(date), 
@@ -109,6 +109,4 @@ quant_matrixstats_col <- function() {
 # quant_future <- function() {
 #   future_apply(as.matrix(pred_quantiles), 1, quantile, probs = desired_quants)
 # }
-
-
 
