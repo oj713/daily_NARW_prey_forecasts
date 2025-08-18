@@ -70,7 +70,6 @@ apply_quantile_preds <- function(wkfs, data,
   returnable_data
 }
 
-
 ########### COPERNICUS RETRIEVAL AND PROCESSING HELPERS
 
 #' Retrieves appropriate dynamic copernicus variables from Copernicus
@@ -108,6 +107,35 @@ retrieve_dynamic_coper_data <- function(config, dates, ci_phys, ci_bgc, diagnose
   coper_data <- c(coper_phys, coper_bgc)
   rm(coper_phys, coper_bgc)
   gc()
+  
+  coper_data
+}
+
+#' Retrieves a predictable covariate cube for a specific version
+#' Not directly used in generate_prediction_cubes, but useful for diagnostics
+#' @param config version yaml config
+#' @param dates Date, vector of desired dates
+#' @return predictable tibble
+generate_covariate_cube <- function(config, dates) {
+  # Base information
+  ci_phys <- get_coper_info("chfc", "phys")
+  ci_bgc <- get_coper_info("world", "bgc")
+  coper_bathy <- read_static(name = "deptho", path = ci_phys$coper_path)
+  
+  # Retrieving copernicus stars data
+  coper_data <- retrieve_dynamic_coper_data(config, dates, 
+                                            ci_phys, ci_bgc, 
+                                            diagnose = TRUE)
+  coper_data$bathy_depth <- coper_bathy
+  
+  # Converting to tibble and adding calculated variables
+  coper_data <- as_tibble(coper_data) |>
+    mutate(date = as.Date(time), .after = y)
+  coper_data <- coper_data |>
+    rename(lon = x, lat = y) |>
+    mutate(day_of_year = lubridate::yday(date), 
+           ind_m2 = -1) |> # Can't be NA bc of apply_quantile_preds
+    derive_calculated_variables(config)
   
   coper_data
 }
