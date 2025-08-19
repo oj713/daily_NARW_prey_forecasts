@@ -24,7 +24,7 @@ p <- ggplot() +
 p
 
 ### Saving material to file
-root_gendata <- "/mnt/ecocast/projectdata/students/ojohnson/copernicus/general_data"
+root_gendata <- "/mnt/ecocast/projectdata/students/ojohnson/copernicus/_general_data"
 write_stars(bathy_slope, layer = 1, 
             dsn = file.path(root_gendata, "bathymetric_slope_terra.tif"))
 

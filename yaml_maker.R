@@ -1,22 +1,22 @@
 v_num <- "0.01"
-overwrite <- FALSE
-species <- c("jellyfish", "cfin", "pseudocalanus", "centrophages")[[2]]
-v_name <- paste0(substr(species, 1, 2), ".", v_num)
+overwrite <- TRUE
+class <- c("jellyfish", "right whale prey")[[1]] # What's the purpose of this data?
+species <- c("coelentrates", "cfin", "pseudocalanus", "centrophages")[[1]]
+v_name <- paste0(substr(species, 1, 4), ".", v_num)
 
-note <- "Same as 0.00, but updated code to use revised training dataset."
+note <- "Adds bathymetric slope as variable."
 
 source("setup.R")
 
 # training data 
 strata = "patch" # currently unread
-coper_data_config <- list(vars_static = "bathy_depth", 
+coper_data_config <- list(vars_static = c("bathy_depth", "bathy_slope"),
                           vars_phys = c("bottomT", "mlotst", "so", "thetao", "vel", "zos"),
-                          vars_bgc = NULL, #c("chl", "no3", "nppv", "o2", "po4", "si"),
+                          vars_bgc = c("chl", "no3", "nppv", "o2", "po4", "si"),
                           vars_time = c("day_length", "ddx_day_length"))
-species_data_config <- list(source = "ecomon", # currently unread
-                            data_columns = c("corrected_CIV_CVI_m2"), # currently unread
-                            vertically_corrected = TRUE, # currently unread
-                            threshold = list(pre = 30000,
+species_data_config <- list(ecomon_column = "coel_m2", # currently unread
+                            alt_source = NULL, #"corrected_CIV_CVI_m2", # currently unread
+                            threshold = list(pre = 0, #30000,
                                              post = NULL)) # currently unread
 # model
 seed <- 799
@@ -32,6 +32,9 @@ brt <- list(name = "Boosted Regression Tree",
 transformations <- c("step_log_bathy", "step_normalize_numeric")
 
 ### ASSEMBLY #############################################
+if (!is.null(species_data_config$ecomon_column) & !is.null(species_data_config$alt_source)) {
+  stop ("One of ecomon_column or alt_source must be blank for yaml configuration.")
+}
 
 training_data_config <- list(species = species, 
                              species_data = species_data_config, 
@@ -42,6 +45,7 @@ model_config <- list(seed = seed,
                      transformations = transformations)
 
 config <- list(version = v_name, 
+               class = class,
                note = note,
                training_data = training_data_config, 
                model = model_config)

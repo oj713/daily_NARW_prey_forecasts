@@ -312,15 +312,32 @@ read_config <- function(v = "sp.0.00") {
 write_config <- function(config, 
                          overwrite = FALSE) {
   v <- config$version
-  path = v_path(v)
-  if (!dir.exists(path)) {
+  species_yaml_path <- file.path(root, paste0(species, ".yaml"))
+  version_path = v_path(v)
+  
+  # Add to or create main species yaml as necessary
+  species_yaml <- list(
+    species = species,
+    class = config$class,
+    ecomon_column = config$training_data$species_data$ecomon_column,
+    alt_source = config$training_data$species_data$alt_source
+  )
+  if (file.exists(species_yaml_path)) {
+    existing_yaml <- yaml::read_yaml(species_yaml_path)
+    # Combine existing and new yaml in case new use classes or sources are available
+    species_yaml <- Map(unique, Map(c, species_yaml, existing_yaml))
+  }
+  yaml::write_yaml(species_yaml, species_yaml_path)
+  
+  # Initiate specific version file
+  if (!dir.exists(version_path)) {
     print(paste0("Creating directory ", v, "..."))
-    dir.create(file.path(path), recursive = TRUE)
-    dir.create(file.path(path, "model"))
-    dir.create(file.path(path, "preds"))
+    dir.create(file.path(version_path), recursive = TRUE)
+    dir.create(file.path(version_path, "model"))
+    dir.create(file.path(version_path, "preds"))
   }
   
-  yaml_file <- file.path(path, paste0(v, ".yaml"))
+  yaml_file <- file.path(version_path, paste0(v, ".yaml"))
   if(overwrite == FALSE && file.exists(yaml_file)) {
     stop('Configuration already exists:', version)
   }

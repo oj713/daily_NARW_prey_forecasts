@@ -1,4 +1,4 @@
-species <- "cfin"
+species <- "coelentrates"
 source("setup.R")
 # Creation
 source("data_preparation/data_from_config.R")
@@ -8,7 +8,7 @@ source("model_analyses/analysis_functions_main.R")
 source("generate_prediction_cubes.R")
 
 # Assumes yaml_maker.R has already been run
-v <- "cf.0.01"
+v <- "coel.0.01"
 config <- read_config(v)
 if (config$training_data$species != species) {
   stop("Species of version is not the same as session defined species.")

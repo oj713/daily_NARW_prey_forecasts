@@ -1,10 +1,10 @@
 cat("Kicking off predictions...\n")
 setwd("/mnt/ecocast/projects/students/ojohnson/daily-forecasts")
-species <- "jellyfish"
+species <- "coelentrates"
 source("setup.R")
 source("generate_prediction_cubes.R")
 
-v <- "je.0.00"
+v <- "coel.0.01"
 
 date_start = as.Date("1993-01-01")
 date_end = as.Date("2019-12-31")
