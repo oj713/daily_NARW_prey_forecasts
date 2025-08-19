@@ -1,7 +1,8 @@
 v_num <- "0.01"
 overwrite <- FALSE
-species <- c("jellyfish", "cfin", "pseudocalanus", "centrophages")[[2]]
-v_name <- paste0(substr(species, 1, 2), ".", v_num)
+class <- c("jellyfish", "right whale prey")[[1]] # What's the purpose of this data?
+species <- c("coelentrates", "cfin", "pseudocalanus", "centrophages")[[2]]
+v_name <- paste0(substr(species, 1, 4), ".", v_num)
 
 note <- "Same as 0.00, but updated code to use revised training dataset."
 
@@ -42,6 +43,7 @@ model_config <- list(seed = seed,
                      transformations = transformations)
 
 config <- list(version = v_name, 
+               class = class,
                note = note,
                training_data = training_data_config, 
                model = model_config)
