@@ -1,5 +1,6 @@
 source("data_preparation/derive_calculated_variables.R")
 source("io_stars.R")
+library(furrr) # Parallel processing
 
 ############ DATA PROCESSING HELPER
 
