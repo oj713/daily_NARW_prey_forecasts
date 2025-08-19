@@ -1,5 +1,5 @@
 v_num <- "0.01"
-overwrite <- FALSE
+overwrite <- TRUE
 class <- c("jellyfish", "right whale prey")[[1]] # What's the purpose of this data?
 species <- c("coelentrates", "cfin", "pseudocalanus", "centrophages")[[1]]
 v_name <- paste0(substr(species, 1, 4), ".", v_num)
@@ -16,7 +16,7 @@ coper_data_config <- list(vars_static = c("bathy_depth", "bathy_slope"),
                           vars_time = c("day_length", "ddx_day_length"))
 species_data_config <- list(ecomon_column = "coel_m2", # currently unread
                             alt_source = NULL, #"corrected_CIV_CVI_m2", # currently unread
-                            threshold = list(pre = 30000,
+                            threshold = list(pre = 0, #30000,
                                              post = NULL)) # currently unread
 # model
 seed <- 799

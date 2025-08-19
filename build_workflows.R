@@ -99,7 +99,7 @@ init_v_wkf <- function(config, mec_folds, verbose = TRUE) {
   template_data <- mec_folds$splits[[1]] |> training()
   wkf_template <- workflow_from_config(config, template_data)
   
-  if (verbose) { print("Starting training...") }
+  if (verbose) { cat("Starting training...") }
   
   # Prints percent progress, super helpful for longer training periods
   progressive_fit <- function(fold, idx) {
@@ -113,7 +113,7 @@ init_v_wkf <- function(config, mec_folds, verbose = TRUE) {
     imap(progressive_fit)
   if (verbose) {
     cat("\r", "100 %")
-    print("Finished training!")
+    cat("\nFinished training!")
   }
   
   # Creating testing analysis dataset
