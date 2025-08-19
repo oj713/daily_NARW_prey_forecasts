@@ -1,29 +1,14 @@
 species <- "cfin"
 source("setup.R")
-source("generate_data_cubes.R")
+source("generate_prediction_cubes.R")
 
 v <- "cf.0.00"
 #### Data Preparation
 testdates <- seq(as.Date("2015-07-15"), by = "days", length.out = 10)
 config <- read_config(v)
 v_wkfs <- get_v_wkfs(v)
-ci_phys <- get_coper_info("chfc", "phys")
-ci_bgc <- get_coper_info("world", "bgc")
-coper_bathy <- read_static(name = "deptho", path = ci_phys$coper_path)
 
-coper_data <- retrieve_dynamic_coper_data(config, testdates, 
-                                          ci_phys, ci_bgc, 
-                                          diagnose = TRUE)
-coper_data$bathy_depth <- coper_bathy
-
-# Converting to tibble, and adding calculated variables
-coper_data <- as_tibble(coper_data)
-coper_data <- mutate(coper_data, date = as.Date(time), .after = y)
-coper_data <- coper_data |>
-  rename(lon = x, lat = y) |>
-  mutate(day_of_year = lubridate::yday(date), 
-         ind_m2 = -1) |> # Can't be NA bc of apply_quantile_preds
-  derive_calculated_variables(config)
+coper_data <- generate_covariate_cube(config, testdates)
 
 ### Predicting
 n_folds <- length(v_wkfs)

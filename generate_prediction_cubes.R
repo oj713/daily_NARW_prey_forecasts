@@ -1,5 +1,7 @@
 source("data_preparation/derive_calculated_variables.R")
 source("io_stars.R")
+library(future) # Parallel processing
+library(furrr) # Cleanly leverage parallel processing with purrr like functions
 
 ############ DATA PROCESSING HELPER
 
@@ -12,33 +14,44 @@ source("io_stars.R")
 #'  This param is ignored if num folds ≤ 3
 #' @param verbose bool, print progress? 
 #' @param na.ignore bool, ignore rows with any NA values? 
+#' @param seed int, seed number for modeling
 #' @return df, quantile results with id columns lon, lat, date
 apply_quantile_preds <- function(wkfs, data, 
                                  desired_quants = c(0, .05, .5, .95, 1), 
-                                 verbose = FALSE, na.ignore = TRUE) {
+                                 verbose = FALSE, na.ignore = TRUE,
+                                 seed = 1) {
   n_folds <- length(wkfs)
   predictable_indices <- (if (na.ignore) { complete.cases(data) }
                           else {TRUE})
   
-  if(verbose) {cat("\n Predicting... 0 /", n_folds)}
+  # The recipe is the same across all workflows: therefore, we can 
+  # bake the data just once to save processing time
+  wkf_rec <- extract_preprocessor(wkfs[[1]]) |> prep()
+  id_vars <- filter(wkf_rec$term_info, role == "ID")$variable 
+  predictable_data <- wkf_rec |>
+    bake(new_data = data[predictable_indices,]) |>
+    select(-all_of(id_vars))
+  # Extract just the models from the workflows as well
+  models <- map(wkfs, extract_fit_parsnip)
   
-  # Calculates predictions from a single workflow
-  get_wkf_column <- function(wkf, idx) {
-    res <- predict(wkf, data[predictable_indices,], type = "prob") |>
-      select(.pred_1)
-    
-    if (verbose) {
-      cat("\r Predicting...", idx, "/", n_folds)
-    }
-    
-    res
+  # Progress bar can handle parallel processing input
+  if(verbose) {cat("\n|", paste(rep(" ", n_folds), collapse = ""), "| Predicting...")}
+  
+  #' Helper: Calculates predictions from a single workflow
+  get_mod_column <- function(mod, idx) {
+    if(verbose) {cat("\r|", paste(rep("+", idx), collapse = ""))}
+    predict(mod, predictable_data, type = "prob") |>
+      dplyr::select(.pred_1)
   }
-  wkf_preds <- wkfs |>
-    imap(get_wkf_column) |>
+  # future_imap will use parallel processing if there exists parallel plan
+  #   else just functions like standard purrr::imap
+  wkf_preds <- models |>
+    furrr::future_imap(get_mod_column,
+                       .options = furrr_options(seed = seed)) |>
     bind_cols() |>
     suppressMessages()
   
-  if(verbose) {cat("\r Calculating quantiles...")}
+  if(verbose) {cat("\r Calculating quantiles...         ")}
   pred_quantiles <- NULL
   # Different calculation methods for high fold versus fold count ≤ 3
   if (n_folds >= 3) {
@@ -70,7 +83,6 @@ apply_quantile_preds <- function(wkfs, data,
   returnable_data
 }
 
-
 ########### COPERNICUS RETRIEVAL AND PROCESSING HELPERS
 
 #' Retrieves appropriate dynamic copernicus variables from Copernicus
@@ -89,6 +101,12 @@ retrieve_dynamic_coper_data <- function(config, dates, ci_phys, ci_bgc, diagnose
   
   #' Helper, retrieves stars data for dates and coper info object
   get_coper_stars <- function(coper_info, variables) {
+    # Throw error if some requested dates aren't available
+    date_available <- dates %in% coper_info$meta_db$date
+    if (!all(date_available)) {
+      stop("Date(s) unavailable in Copernicus: ", paste(dates[!date_available], collapse = ", "))
+    }
+    
     coper_info$meta_db |>
       filter(date %in% dates, variable %in% variables) |>
       read_andreas(coper_info$coper_path)
@@ -112,6 +130,35 @@ retrieve_dynamic_coper_data <- function(config, dates, ci_phys, ci_bgc, diagnose
   coper_data
 }
 
+#' Retrieves a predictable covariate cube for a specific version
+#' Not directly used in generate_prediction_cubes, but useful for diagnostics
+#' @param config version yaml config
+#' @param dates Date, vector of desired dates
+#' @return predictable tibble
+generate_covariate_cube <- function(config, dates) {
+  # Base information
+  ci_phys <- get_coper_info("chfc", "phys")
+  ci_bgc <- get_coper_info("world", "bgc")
+  coper_bathy <- read_static(name = "deptho", path = ci_phys$coper_path)
+  
+  # Retrieving copernicus stars data
+  coper_data <- retrieve_dynamic_coper_data(config, dates, 
+                                            ci_phys, ci_bgc, 
+                                            diagnose = TRUE)
+  coper_data$bathy_depth <- coper_bathy
+  
+  # Converting to tibble and adding calculated variables
+  coper_data <- as_tibble(coper_data) |>
+    mutate(date = as.Date(time), .after = y)
+  coper_data <- coper_data |>
+    rename(lon = x, lat = y) |>
+    mutate(day_of_year = lubridate::yday(date), 
+           ind_m2 = -1) |> # Can't be NA bc of apply_quantile_preds
+    derive_calculated_variables(config)
+  
+  coper_data
+}
+
 ################# MAIN FUNCTIONS
 
 # One layer of the biogeochemical coper stars is 47 MB
@@ -128,6 +175,7 @@ retrieve_dynamic_coper_data <- function(config, dates, ci_phys, ci_bgc, diagnose
 #' @param fold_subset int, if not NULL subset workflows to reduce calculation time
 #' @param as_float bool, saving prediction cube values as float or dbl? 
 #' @param add bool, adding to existing material saved to file? 
+#' @param parallel bool, use parallel processing to speed up predictions?
 #'  If FALSE, only unused save_folder names are allowed
 #' @return either prediction stars object or list of partitions with success booleans
 generate_prediction_cubes <- function(v, dates, 
@@ -137,8 +185,8 @@ generate_prediction_cubes <- function(v, dates,
                                       desired_quants = c(0, .05, .25, .5, .75, .95, 1),
                                       fold_subset = NULL,
                                       as_float = FALSE,
-                                      add = FALSE) {
-  
+                                      add = FALSE, 
+                                      parallel = FALSE) {
   save_path <- NULL
   # Are we saving to file? 
   if (!is.null(save_folder)) {
@@ -240,7 +288,8 @@ generate_prediction_cubes <- function(v, dates,
       coper_chunk <- apply_quantile_preds(v_wkfs, 
                                           coper_data, 
                                           desired_quants = desired_quants, 
-                                          verbose = verbose)
+                                          verbose = verbose, 
+                                          seed = config$model$seed)
       rm(coper_data)
       coper_chunk <- coper_chunk |>
         st_as_stars(dims = c("lon", "lat", "date")) |>
@@ -320,12 +369,21 @@ generate_prediction_cubes <- function(v, dates,
     success
   }
 
-  if (class(dates) == "Date") {
-    generate_partition_cube(dates, partition_name = NULL)
-  } else {
-    dates |>
-      imap(generate_partition_cube)
-  }
+  #' Appropriate pass date vectors to generate_partition_cube and return
+  #' Using tryCatch to ensure that parallel plans are always reset to sequential
+  tryCatch({
+    if (parallel) {plan(multisession, workers = 4)}
+    
+    if (class(dates) == "Date") {
+      generate_partition_cube(dates, partition_name = NULL)
+    } else {
+      dates |>
+        imap(generate_partition_cube)
+    }
+  },
+  finally = { # Make sure parallel is turned off, regardless of error or not!
+    plan(sequential)
+  })
 }
 
 #' Generates data cubes for a version at yearly resolution
@@ -374,7 +432,8 @@ generate_yearly_cubes <- function(v,
                                    max_chunk_size = 92, 
                                    fold_subset = fold_subset,
                                    as_float = as_float,
-                                   add = add)
+                                   add = add, 
+                                   parallel = TRUE)
   
   # Are all entries a TRUE?? 
   if (!all(unlist(res) |> vapply(isTRUE, logical(1)))) {
