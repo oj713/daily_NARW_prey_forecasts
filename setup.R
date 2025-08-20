@@ -12,12 +12,23 @@ suppressPackageStartupMessages(
     library(matrixStats) # for fast quantile processing
   })
 
+#' Retrieves the path to the general repository for all project data
+#' @param ... additional subdirectories or folders
+#' @return str path
+get_path_main <- function(...) {
+  project_data_dir <- "/mnt/ecocast/projectdata/students/ojohnson/copernicus"
+  
+  extras <- Filter(Negate(is.null), list(...))
+  
+  do.call(file.path, c(project_data_dir, extras))
+}
+
 #' Sets the species for the remainder of the session. 
 #' Creates a new set of directories if needed.
 #' @param species str, species name
 #' @return root path for rest of session
 get_root <- function(species) {
-  root <- file.path("/mnt/ecocast/projectdata/students/ojohnson/copernicus", species)
+  root <- get_path_main(species)
   if (!dir.exists(root)) {
     user_input <- readline(paste0("Create new directory for ", species, "? (y/n) "))
     if(user_input != 'y') {

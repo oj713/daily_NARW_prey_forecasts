@@ -31,7 +31,7 @@ match_abund_allcoper <- function(spec_name, abundance_df, verbose = TRUE) {
     "phys" = get_coper_info(region = "chfc", type = "phys"), 
     "bgc" = get_coper_info(region = "world", type = "bgc")
   )
-  bathy_slope_file <- file.path(root, "_general_data", "bathymetric_slope_terra.tif")
+  bathy_slope_file <- get_path_main("_general_data", "bathymetric_slope_terra.tif")
   
   # Spatially and temporally crop the data
   abund_sf <- abundance_df |>

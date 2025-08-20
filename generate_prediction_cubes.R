@@ -85,19 +85,18 @@ apply_quantile_preds <- function(wkfs, data,
 
 ########### COPERNICUS RETRIEVAL AND PROCESSING HELPERS
 
-#' Retrieves appropriate dynamic copernicus variables from Copernicus
-#' Issue: Assumes that physical variables must exist. 
+#' Retrieves appropriate dynamic variables from Copernicus
+#' Assumes that ≥ 1 physical variable is specified in config.
 #' @param config version yaml config
 #' @param dates Date, vector of dates
 #' @param ci_phys coper_info object, physical copernicus information
 #' @param ci_bgc coper_info object, biogeochemical copernicus information
 #' @param diagnose bool, allow diagnosis for correct_andreas? 
-#' @return stars object
+#' @return 4d stars object
 retrieve_dynamic_coper_data <- function(config, dates, ci_phys, ci_bgc, diagnose = FALSE) {
-  vars_phys <- config$training_data$coper_data$vars_phys
-  if ("vel" %in% vars_phys) {vars_phys <- c(vars_phys, "uo", "vo")}
-  if (is.null(vars_phys)) {stop("At least one physical variable must be specified.")}
-  vars_bgc <- config$training_data$coper_data$vars_bgc
+  vars <- config$training_data$coper_data
+  if ("vel" %in% vars$vars_phys) {vars$vars_phys <- c(vars$vars_phys, "uo", "vo")}
+  if (is.null(vars$vars_phys)) {stop("At least one physical variable must be specified.")}
   
   #' Helper, retrieves stars data for dates and coper info object
   get_coper_stars <- function(coper_info, variables) {
@@ -113,11 +112,11 @@ retrieve_dynamic_coper_data <- function(config, dates, ci_phys, ci_bgc, diagnose
   }
   
   # Extract physical variables and correct if necessary
-  coper_phys <- get_coper_stars(ci_phys, vars_phys) |>
+  coper_phys <- get_coper_stars(ci_phys, vars$vars_phys) |>
     correct_andreas(diagnose = diagnose)
   # Extract biogeochemical variables & warp to match physical
   coper_bgc <- NULL
-  if (!is.null(vars_bgc)) {
+  if (!is.null(vars$vars_bgc)) {
     coper_bgc <- get_coper_stars(ci_bgc, config$training_data$coper_data$vars_bgc) |>
       st_warp(dest = coper_phys, method = "near")
   }
@@ -130,8 +129,30 @@ retrieve_dynamic_coper_data <- function(config, dates, ci_phys, ci_bgc, diagnose
   coper_data
 }
 
+#' Retrieves static stars variables from/derived from Copernicus
+#' Currently only supports bathy_depth and bathy_slope
+#' @param config version yaml config
+#' @return 3d stars object
+retrieve_static_coper_data <- function(config) {
+  vars_static <- config$training_data$coper_data$vars_static
+  # Adding static variables as appropriate
+  coper_static <- NULL
+  if ("bathy_depth" %in% vars_static) {
+    coper_static$bathy_depth <- read_static(name = "deptho", path = ci_phys$coper_path) |>
+      setNames("bathy_depth")
+  }
+  if ("bathy_slope" %in% vars_static) {
+    coper_static$bathy_slope <- 
+      read_stars(get_path_main("_general_data", "bathymetric_slope_terra.tif")) |>
+      setNames("bathy_slope")
+  }
+  
+  Reduce(c, coper_static)
+}
+
 #' Retrieves a predictable covariate cube for a specific version
 #' Not directly used in generate_prediction_cubes, but useful for diagnostics
+#' Is duplicating code from generate_prediction_chunk
 #' @param config version yaml config
 #' @param dates Date, vector of desired dates
 #' @return predictable tibble
@@ -139,14 +160,16 @@ generate_covariate_cube <- function(config, dates) {
   # Base information
   ci_phys <- get_coper_info("chfc", "phys")
   ci_bgc <- get_coper_info("world", "bgc")
-  coper_bathy <- read_static(name = "deptho", path = ci_phys$coper_path)
   
   # Retrieving copernicus stars data
   coper_data <- retrieve_dynamic_coper_data(config, dates, 
                                             ci_phys, ci_bgc, 
                                             diagnose = TRUE)
-  coper_data$bathy_depth <- coper_bathy
-  
+  coper_static <- retrieve_static_coper_data(config)
+  for(attribute in names(coper_static)) {
+    coper_data[[attribute]] <- coper_static[[attribute]]
+  }
+
   # Converting to tibble and adding calculated variables
   coper_data <- as_tibble(coper_data) |>
     mutate(date = as.Date(time), .after = y)
@@ -211,7 +234,7 @@ generate_prediction_cubes <- function(v, dates,
   # Coper information
   ci_phys <- get_coper_info("chfc", "phys")
   ci_bgc <- get_coper_info("world", "bgc")
-  coper_bathy <- read_static(name = "deptho", path = ci_phys$coper_path)
+  coper_static <- retrieve_static_coper_data(config)
   
   #' Helper: Processes a single date vector and saves to file
   #' Divides data into smaller chunks as necessary
@@ -268,7 +291,9 @@ generate_prediction_cubes <- function(v, dates,
       coper_data <- retrieve_dynamic_coper_data(config, dates_chunk, 
                                                 ci_phys, ci_bgc, 
                                                 diagnose = verbose)
-      coper_data$bathy_depth <- coper_bathy
+      for(attribute in names(coper_static)) {
+        coper_data[[attribute]] <- coper_static[[attribute]]
+      }
       
       # Converting to tibble, and adding calculated variables
       coper_data <- as_tibble(coper_data)

@@ -30,10 +30,10 @@ dates_deliberatebreak <-
 
 res <- generate_prediction_cubes(v, 
                                  dates_test, 
-                                 save_folder = "test_sequential", 
+                                 save_folder = "test_nobreakihope", 
                                  verbose = TRUE, 
-                                 max_chunk_size = 7,
+                                 max_chunk_size = 3,
                                  fold_subset = 7, 
                                  add = FALSE, 
-                                 parallel = FALSE)
+                                 parallel = TRUE)
 }
