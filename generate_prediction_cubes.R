@@ -138,7 +138,8 @@ retrieve_static_coper_data <- function(config) {
   # Adding static variables as appropriate
   coper_static <- NULL
   if ("bathy_depth" %in% vars_static) {
-    coper_static$bathy_depth <- read_static(name = "deptho", path = ci_phys$coper_path) |>
+    coper_static$bathy_depth <- 
+      read_static(name = "deptho", path = copernicus_path("chfc/GLOBAL_MULTIYEAR_PHY_001_030")) |>
       setNames("bathy_depth")
   }
   if ("bathy_slope" %in% vars_static) {
