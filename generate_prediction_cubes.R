@@ -459,7 +459,7 @@ generate_yearly_cubes <- function(v,
                                    fold_subset = fold_subset,
                                    as_float = as_float,
                                    add = add, 
-                                   parallel = TRUE)
+                                   parallel = FALSE) ## Turn on later
   
   # Are all entries a TRUE?? 
   if (!all(unlist(res) |> vapply(isTRUE, logical(1)))) {
