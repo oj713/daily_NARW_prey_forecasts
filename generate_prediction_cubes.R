@@ -1,7 +1,7 @@
 source("data_preparation/derive_calculated_variables.R")
 source("io_stars.R")
 library(future) # Parallel processing
-library(furrr) # Cleanly leverage parallel processing with purrr like functions
+library(furrr) # Cleanly leverage parallel processing with purrr-like functions
 
 ############ DATA PROCESSING HELPER
 
@@ -14,12 +14,14 @@ library(furrr) # Cleanly leverage parallel processing with purrr like functions
 #'  This param is ignored if num folds ≤ 3
 #' @param verbose bool, print progress? 
 #' @param na.ignore bool, ignore rows with any NA values? 
-#' @param seed int, seed number for modeling
+#' @param parallel bool, use parallel processing?
+#' @param parallel_seed int, seed number for modeling
 #' @return df, quantile results with id columns lon, lat, date
 apply_quantile_preds <- function(wkfs, data, 
                                  desired_quants = c(0, .05, .5, .95, 1), 
                                  verbose = FALSE, na.ignore = TRUE,
-                                 seed = 1) {
+                                 parallel = FALSE,
+                                 parallel_seed = 1) {
   n_folds <- length(wkfs)
   predictable_indices <- (if (na.ignore) { complete.cases(data) }
                           else {TRUE})
@@ -28,6 +30,7 @@ apply_quantile_preds <- function(wkfs, data,
   # bake the data just once to save processing time
   wkf_rec <- extract_preprocessor(wkfs[[1]]) |> prep()
   id_vars <- filter(wkf_rec$term_info, role == "ID")$variable 
+  # Predefine the xd matrix for xgboost predictions
   predictable_data <- wkf_rec |>
     bake(new_data = data[predictable_indices,]) |>
     select(-all_of(id_vars))
@@ -43,16 +46,20 @@ apply_quantile_preds <- function(wkfs, data,
     predict(mod, predictable_data, type = "prob") |>
       dplyr::select(.pred_1)
   }
+  
+  map_func <- ifelse(parallel, 
+                     function(x, y) furrr::future_imap(x, y, 
+                                                .options = furr_options(seed = parallel_seed)),
+                     purrr:::imap)
+  
   # future_imap will use parallel processing if there exists parallel plan
   #   else just functions like standard purrr::imap
   wkf_preds <- models |>
-    furrr::future_imap(get_mod_column,
-                       .options = furrr_options(seed = seed, 
-                                                globals = FALSE)) |>
+    map_func(get_mod_column) |>
     bind_cols() |>
     suppressMessages()
   
-  if(verbose) {cat("\r Calculating quantiles...         ")}
+  if(verbose) {cat("\r Calculating quantiles...                  ")}
   pred_quantiles <- NULL
   # Different calculation methods for high fold versus fold count ≤ 3
   if (n_folds >= 3) {
@@ -316,7 +323,8 @@ generate_prediction_cubes <- function(v, dates,
                                           coper_data, 
                                           desired_quants = desired_quants, 
                                           verbose = verbose, 
-                                          seed = config$model$seed)
+                                          parallel = parallel,
+                                          parallel_seed = config$model$seed)
       rm(coper_data)
       coper_chunk <- coper_chunk |>
         st_as_stars(dims = c("lon", "lat", "date")) |>
@@ -467,7 +475,7 @@ generate_yearly_cubes <- function(v,
                                    fold_subset = fold_subset,
                                    as_float = as_float,
                                    add = add, 
-                                   parallel = TRUE)
+                                   parallel = FALSE)
   
   # Are all entries a TRUE?? 
   if (!all(unlist(res) |> vapply(isTRUE, logical(1)))) {
