@@ -1,4 +1,4 @@
-cat("Kicking off predictions...\n")
+cat("Kicking off predictions ...\n")
 setwd("/mnt/ecocast/projects/students/ojohnson/daily-forecasts")
 species <- "coelentrates"
 source("setup.R")
