@@ -33,9 +33,6 @@ brt <- list(name = "Boosted Regression Tree",
 transformations <- c("step_log_bathy", "step_normalize_numeric")
 
 ### ASSEMBLY #############################################
-if (!is.null(species_data_config$ecomon_column) & !is.null(species_data_config$alt_source)) {
-  stop ("One of ecomon_column or alt_source must be blank for yaml configuration.")
-}
 
 training_data_config <- list(species = species, 
                              species_data = species_data_config, 
@@ -50,6 +47,14 @@ config <- list(version = v_name,
                note = note,
                training_data = training_data_config, 
                model = model_config)
+
+### TYPE CHECKS ###########################################
+if (!is.null(species_data_config$ecomon_column) & !is.null(species_data_config$alt_source)) {
+  stop ("One of ecomon_column or alt_source must be blank for yaml configuration.")
+}
+if (model_config$model$name != "Boosted Regression Tree") {
+  stop("Model types other than BRT are currently not supported.")
+}
 
 ### WRITING TO FILE
 write_config(config, overwrite = overwrite)

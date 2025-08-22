@@ -34,7 +34,7 @@ library(tictoc)
 tic()
 res <- generate_prediction_cubes(v, 
                                  dates_ten, 
-                                 save_folder = "pleasegodpleas3e", 
+                                 save_folder = "pleasegodpsdledsas3e", 
                                  verbose = TRUE, 
                                  max_chunk_size = 92,
                                  fold_subset = NULL, 

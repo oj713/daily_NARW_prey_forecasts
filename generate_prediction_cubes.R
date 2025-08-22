@@ -25,25 +25,29 @@ apply_quantile_preds <- function(wkfs, data,
   wkf_rec <- extract_preprocessor(wkfs[[1]]) |> prep()
   id_vars <- filter(wkf_rec$term_info, role == "ID")$variable 
   # Predefine the xd matrix for xgboost predictions
-  predictable_data <- wkf_rec |>
+  predictable_matrix <- wkf_rec |>
     bake(new_data = data[predictable_indices,]) |>
-    select(-all_of(id_vars))
+    select(-all_of(id_vars)) |>
+    as.matrix() |>
+    xgboost::xgb.DMatrix()
   # Extract just the models from the workflows as well
-  models <- map(wkfs, extract_fit_parsnip)
+  models <- map(wkfs, ~extract_fit_parsnip(.x)$fit |>
+                  xgboost::xgb.Booster.complete())
   
   # Progress bar
   if(verbose) {cat("\n Predicting... 0 /", n_folds)}
   
-  #' Helper: Calculates predictions from a single workflow
+  #' Helper: Calculates predictions from a single model
   get_mod_column <- function(mod, idx) {
     if(verbose) {cat("\r Predicting...", idx, "/", n_folds)}
-    predict(mod, predictable_data, type = "prob") |>
-      dplyr::select(.pred_1)
+    predict(mod, predictable_matrix)
   }
-  wkf_preds <- models |>
+  # Loop across models, calculate probability, collapse
+  preds_matrix <- models |>
     purrr::imap(get_mod_column) |>
     bind_cols() |>
     suppressMessages()
+  preds_matrix <- Reduce(rbind, preds_matrix)
   
   if(verbose) {cat("\r Calculating quantiles...   ")}
   pred_quantiles <- NULL
@@ -52,15 +56,14 @@ apply_quantile_preds <- function(wkfs, data,
     # Calculate quantiles
     if (n_folds == 3) {desired_quants <- c(0, .5, 1)}
     # matrixStats is 10x faster than apply(x, 1, quantile)
-    pred_quantiles <- wkf_preds |>
-      t() |> 
+    pred_quantiles <- preds_matrix |>
       matrixStats::colQuantiles(probs = desired_quants)
     
   } else if (n_folds <= 2) {
     # Mean (n_folds = 2) OR identity (n_folds = 1)
     desired_quants <- c(.5)
     if (n_folds == 2) {
-      pred_quantiles <- rowMeans(wkf_preds) |>
+      pred_quantiles <- rowMeans(t(preds_matrix)) |>
       as_tibble_col()
     }
     colnames(pred_quantiles) <- paste0(desired_quants * 100, "%")
