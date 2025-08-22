@@ -30,34 +30,28 @@ apply_quantile_preds <- function(wkfs, data,
   # bake the data just once to save processing time
   wkf_rec <- extract_preprocessor(wkfs[[1]]) |> prep()
   id_vars <- filter(wkf_rec$term_info, role == "ID")$variable 
-  # Predefine the xd matrix for xgboost predictions
-  predictable_data <- wkf_rec |>
+  # Predefine the matrix for xgboost predictions
+  predictable_matrix <- wkf_rec |>
     bake(new_data = data[predictable_indices,]) |>
-    select(-all_of(id_vars))
-  # Extract just the models from the workflows as well
-  models <- map(wkfs, extract_fit_parsnip)
+    select(-all_of(id_vars)) |>
+    as.matrix()
+  # Extract just the xgboost models from the workflows as well
+  models <- map(wkfs, ~extract_fit_parsnip(.x)$fit |>
+                  xgboost::xgb.Booster.complete())
   
   # Progress bar can handle parallel processing input
   if(verbose) {cat("\n|", paste(rep(" ", n_folds), collapse = ""), "| Predicting...")}
   
-  #' Helper: Calculates predictions from a single workflow
-  get_mod_column <- function(mod, idx) {
-    if(verbose) {cat("\r|", paste(rep("+", idx), collapse = ""))}
-    predict(mod, predictable_data, type = "prob") |>
-      dplyr::select(.pred_1)
+  #' Helper: Calculates predictions from a single model
+  get_mod_column <- function(mod, idx, mat) {
+    cat("\r|", paste(rep("+", idx), collapse = ""))
+    
+    predict(mod, xgboost::xgb.DMatrix(mat)) ## Returns vector
   }
-  
-  map_func <- ifelse(parallel, 
-                     function(x, y) furrr::future_imap(x, y, 
-                                                .options = furr_options(seed = parallel_seed)),
-                     purrr:::imap)
-  
-  # future_imap will use parallel processing if there exists parallel plan
-  #   else just functions like standard purrr::imap
-  wkf_preds <- models |>
-    map_func(get_mod_column) |>
-    bind_cols() |>
-    suppressMessages()
+  pred_matrix <- models |>
+    furrr::future_imap(~get_mod_column(.x, .y, predictable_matrix), 
+                       .options = furrr_options(seed = parallel_seed, globals = FALSE))
+  pred_matrix <- Reduce(rbind, pred_matrix)
   
   if(verbose) {cat("\r Calculating quantiles...                  ")}
   pred_quantiles <- NULL
@@ -66,15 +60,14 @@ apply_quantile_preds <- function(wkfs, data,
     # Calculate quantiles
     if (n_folds == 3) {desired_quants <- c(0, .5, 1)}
     # matrixStats is 10x faster than apply(x, 1, quantile)
-    pred_quantiles <- wkf_preds |>
-      t() |> 
+    pred_quantiles <- pred_matrix |>
       matrixStats::colQuantiles(probs = desired_quants)
     
   } else if (n_folds <= 2) {
     # Mean (n_folds = 2) OR identity (n_folds = 1)
     desired_quants <- c(.5)
     if (n_folds == 2) {
-      pred_quantiles <- rowMeans(wkf_preds) |>
+      pred_quantiles <- rowMeans(t(pred_matrix)) |>
       as_tibble_col()
     }
     colnames(pred_quantiles) <- paste0(desired_quants * 100, "%")
@@ -219,6 +212,9 @@ generate_prediction_cubes <- function(v, dates,
                                       as_float = FALSE,
                                       add = FALSE, 
                                       parallel = FALSE) {
+  
+  if (class(max_chunk_size) != "numeric") { stop("max_chunk_size must be an integer") }
+  
   save_path <- NULL
   # Are we saving to file? 
   if (!is.null(save_folder)) {

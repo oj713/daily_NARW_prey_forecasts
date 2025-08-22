@@ -11,7 +11,7 @@ wkfs <- get_v_wkfs(v)
 n_folds <- length(wkfs)
 
 data <- generate_covariate_cube(config, 
-                                seq(as.Date("1994-01-01"), by = "days", length.out = 90))
+                                seq(as.Date("1994-01-01"), by = "days", length.out = 2))
 
 #' Calculates time taken to do a thing, average of three runs
 #' basically system.time with printing
@@ -89,6 +89,42 @@ oneS_splitoutRecipe <- function() {
   get_mod_column <- function(mod, idx) {
     res <- predict(mod, predictable_data, type = "prob") |>
       select(.pred_1)
+    
+    if (TRUE) {
+      cat("\r Predicting...", idx, "/", n_folds)
+    }
+    
+    res
+  }
+  
+  wkf_preds <- models |>
+    imap(get_mod_column) |>
+    bind_cols() |>
+    suppressMessages()
+}
+
+## Converting to DMatrix as well before passing in
+# 28.7521
+oneS_splitoutRecipe_dMatrix <- function() {
+  wkf_rec <- extract_preprocessor(wkfs[[1]]) |> prep()
+  predictable_indices <- complete.cases(data)
+  id_vars <- wkf_rec$term_info |>
+    filter(role == "ID") |>
+    pull(variable)
+  predictable_matrix <- wkf_rec |>
+    bake(new_data = data[predictable_indices,]) |>
+    select(-all_of(id_vars)) |>
+    as.matrix() |>
+    xgboost::xgb.DMatrix()
+  
+  models <- map(wkfs, ~extract_fit_parsnip(.x)$fit |>
+                  xgboost::xgb.Booster.complete())
+  
+  get_mod_column <- function(mod, idx) {
+    # No longer calling parsnip predict, but drilling down to base xgboost
+    res <- predict(xgb_obj, predictable_matrix) |>
+      as.data.frame() |>
+      setNames(".pred_1")
     
     if (TRUE) {
       cat("\r Predicting...", idx, "/", n_folds)
