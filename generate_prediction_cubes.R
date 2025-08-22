@@ -8,21 +8,21 @@ library(furrr) # Cleanly leverage parallel processing with purrr-like functions
 #' Calculates quantile predictions for a set of workflows and a dataset
 #' Calculates mean, median, max, min as appropriate if num folds ≤ 3
 #' Leaves any NA rows in the dataset as is
+#' Leverages parallel processing if multisession plan already engaged
 #' @param wkfs workflow set
 #' @param data df, data to predict on
 #' @param desired_quants numeric, list of percentiles to return
 #'  This param is ignored if num folds ≤ 3
 #' @param verbose bool, print progress? 
 #' @param na.ignore bool, ignore rows with any NA values? 
-#' @param parallel bool, use parallel processing?
-#' @param parallel_seed int, seed number for modeling
+#' @param seed int, seed number for modeling, parallel only
 #' @return df, quantile results with id columns lon, lat, date
 apply_quantile_preds <- function(wkfs, data, 
                                  desired_quants = c(0, .05, .5, .95, 1), 
                                  verbose = FALSE, na.ignore = TRUE,
-                                 parallel = FALSE,
-                                 parallel_seed = 1) {
+                                 seed = 1) {
   n_folds <- length(wkfs)
+  num_workers <- future::nbrOfWorkers()
   predictable_indices <- (if (na.ignore) { complete.cases(data) }
                           else {TRUE})
   
@@ -30,30 +30,44 @@ apply_quantile_preds <- function(wkfs, data,
   # bake the data just once to save processing time
   wkf_rec <- extract_preprocessor(wkfs[[1]]) |> prep()
   id_vars <- filter(wkf_rec$term_info, role == "ID")$variable 
-  # Predefine the matrix for xgboost predictions
-  predictable_matrix <- wkf_rec |>
+  predictable_data <- wkf_rec |>
     bake(new_data = data[predictable_indices,]) |>
-    select(-all_of(id_vars)) |>
-    as.matrix()
-  # Extract just the xgboost models from the workflows as well
+    select(-all_of(id_vars))
+  
+  # Splitting the data by row in accordance with number of workers
+  # A subchunk is just the whole dataset in sequential processing
+  pm_subchunks <- if (num_workers == 1) {
+    as.matrix(predictable_data)
+  } else {
+    predictable_data |>
+      split(rep_len(1:num_workers, length.out = nrow(predictable_data)) |>
+              sort()) |>
+      lapply(as.matrix)
+  }
+  
+  # Extract just the xgboost models from the workflows
   models <- map(wkfs, ~extract_fit_parsnip(.x)$fit |>
                   xgboost::xgb.Booster.complete())
   
-  # Progress bar can handle parallel processing input
-  if(verbose) {cat("\n|", paste(rep(" ", n_folds), collapse = ""), "| Predicting...")}
+  # Progress bar
+  if (verbose) {cat(sprintf("\n Predicting...   0 - 0   (%s - %s)", 
+                            num_workers, n_folds))}
   
-  #' Helper: Calculates predictions from a single model
-  get_mod_column <- function(mod, idx, mat) {
-    cat("\r|", paste(rep("+", idx), collapse = ""))
-    
-    predict(mod, xgboost::xgb.DMatrix(mat)) ## Returns vector
+  #' Helper: Calculates predictions for a single subchunk
+  get_subchunk_preds <- function(subchunk, sc_idx, mods) {
+    Reduce(rbind, imap(mods, ~{
+      if (verbose) {cat(sprintf("\r Predicting...   %s - %s ", sc_idx, .y))}
+      predict(.x, subchunk)
+    }))
   }
-  pred_matrix <- models |>
-    furrr::future_imap(~get_mod_column(.x, .y, predictable_matrix), 
-                       .options = furrr_options(seed = parallel_seed, globals = FALSE))
-  pred_matrix <- Reduce(rbind, pred_matrix)
+  # Defining mapping function depending on whether we're using parallel or not
+  map_func <- ifelse(num_workers > 1, 
+    function(sc, fn) furrr::future_imap(sc, fn, .options = furrr_options(seed = seed, globals = FALSE)), 
+    purrr::imap)
+  # Calculate preds across subchunks and bind together
+  pred_matrix <- Reduce(cbind, map_func(pm_subchunks, ~get_subchunk_preds(.x, .y, models)))
   
-  if(verbose) {cat("\r Calculating quantiles...                  ")}
+  if(verbose) {cat("\r Calculating quantiles...             ")}
   pred_quantiles <- NULL
   # Different calculation methods for high fold versus fold count ≤ 3
   if (n_folds >= 3) {
@@ -319,8 +333,7 @@ generate_prediction_cubes <- function(v, dates,
                                           coper_data, 
                                           desired_quants = desired_quants, 
                                           verbose = verbose, 
-                                          parallel = parallel,
-                                          parallel_seed = config$model$seed)
+                                          seed = config$model$seed)
       rm(coper_data)
       coper_chunk <- coper_chunk |>
         st_as_stars(dims = c("lon", "lat", "date")) |>

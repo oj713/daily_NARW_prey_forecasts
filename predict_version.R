@@ -28,13 +28,16 @@ dates_deliberatebreak <-
   list("summer" = as.Date(c("2014/5/20", "2015/6/20", "2015/7/20", "2015/8/20", "2035/9/20", "2035/10/20")),
        "winter" = as.Date(c("2014/11/20", "2014/12/20", "2015/1/20", "2015/2/20", "2015/3/20")))
 dates_chunktest <- seq(as.Date("2014/11/20"), by = "days", length.out = 74)
+dates_small <- dates_chunktest[1:10]
 
+tic()
 res <- generate_prediction_cubes(v, 
                                  dates_chunktest, 
-                                 save_folder = "test_singlechunk", 
+                                 save_folder = "test_fullchunk32", 
                                  verbose = TRUE, 
-                                 max_chunk_size = NULL,
+                                 max_chunk_size = 92,
                                  fold_subset = NULL, 
                                  add = TRUE, 
                                  parallel = TRUE)
+toc()
 }
