@@ -4,7 +4,7 @@ class <- c("jellyfish", "right whale prey")[[1]] # What's the purpose of this da
 species <- c("coelentrates", "cfin", "pseudocalanus", "centrophages")[[1]]
 v_name <- paste0(substr(species, 1, 4), ".", v_num)
 
-note <- "Adds bathymetric slope as variable."
+note <- "Bathymetric slope, multithreaded xgboost objects"
 
 source("setup.R")
 
@@ -27,7 +27,8 @@ brt <- list(name = "Boosted Regression Tree",
             learn_rate = .1,
             tree_depth = 4,
             mtry = 5,
-            min_n = 10)
+            min_n = 10, 
+            nthread = 4)
 
 transformations <- c("step_log_bathy", "step_normalize_numeric")
 

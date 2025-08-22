@@ -1,7 +1,5 @@
 source("data_preparation/derive_calculated_variables.R")
 source("io_stars.R")
-library(future) # Parallel processing
-library(furrr) # Cleanly leverage parallel processing with purrr-like functions
 
 ############ DATA PROCESSING HELPER
 
@@ -14,14 +12,10 @@ library(furrr) # Cleanly leverage parallel processing with purrr-like functions
 #'  This param is ignored if num folds ≤ 3
 #' @param verbose bool, print progress? 
 #' @param na.ignore bool, ignore rows with any NA values? 
-#' @param parallel bool, use parallel processing?
-#' @param parallel_seed int, seed number for modeling
 #' @return df, quantile results with id columns lon, lat, date
 apply_quantile_preds <- function(wkfs, data, 
                                  desired_quants = c(0, .05, .5, .95, 1), 
-                                 verbose = FALSE, na.ignore = TRUE,
-                                 parallel = FALSE,
-                                 parallel_seed = 1) {
+                                 verbose = FALSE, na.ignore = TRUE) {
   n_folds <- length(wkfs)
   predictable_indices <- (if (na.ignore) { complete.cases(data) }
                           else {TRUE})
@@ -37,29 +31,21 @@ apply_quantile_preds <- function(wkfs, data,
   # Extract just the models from the workflows as well
   models <- map(wkfs, extract_fit_parsnip)
   
-  # Progress bar can handle parallel processing input
-  if(verbose) {cat("\n|", paste(rep(" ", n_folds), collapse = ""), "| Predicting...")}
+  # Progress bar
+  if(verbose) {cat("\n Predicting... 0 /", n_folds)}
   
   #' Helper: Calculates predictions from a single workflow
   get_mod_column <- function(mod, idx) {
-    if(verbose) {cat("\r|", paste(rep("+", idx), collapse = ""))}
+    if(verbose) {cat("\r Predicting...", idx, "/", n_folds)}
     predict(mod, predictable_data, type = "prob") |>
       dplyr::select(.pred_1)
   }
-  
-  map_func <- ifelse(parallel, 
-                     function(x, y) furrr::future_imap(x, y, 
-                                                .options = furr_options(seed = parallel_seed)),
-                     purrr:::imap)
-  
-  # future_imap will use parallel processing if there exists parallel plan
-  #   else just functions like standard purrr::imap
   wkf_preds <- models |>
-    map_func(get_mod_column) |>
+    purrr::imap(get_mod_column) |>
     bind_cols() |>
     suppressMessages()
   
-  if(verbose) {cat("\r Calculating quantiles...                  ")}
+  if(verbose) {cat("\r Calculating quantiles...   ")}
   pred_quantiles <- NULL
   # Different calculation methods for high fold versus fold count ≤ 3
   if (n_folds >= 3) {
@@ -207,7 +193,6 @@ generate_covariate_cube <- function(config, dates) {
 #' @param fold_subset int, if not NULL subset workflows to reduce calculation time
 #' @param as_float bool, saving prediction cube values as float or dbl? 
 #' @param add bool, adding to existing material saved to file? 
-#' @param parallel bool, use parallel processing to speed up predictions?
 #'  If FALSE, only unused save_folder names are allowed
 #' @return either prediction stars object or list of partitions with success booleans
 generate_prediction_cubes <- function(v, dates, 
@@ -217,8 +202,7 @@ generate_prediction_cubes <- function(v, dates,
                                       desired_quants = c(0, .05, .25, .5, .75, .95, 1),
                                       fold_subset = NULL,
                                       as_float = FALSE,
-                                      add = FALSE, 
-                                      parallel = FALSE) {
+                                      add = FALSE) {
   save_path <- NULL
   # Are we saving to file? 
   if (!is.null(save_folder)) {
@@ -252,7 +236,7 @@ generate_prediction_cubes <- function(v, dates,
   #' @return TRUE if successful OR stars object if no save
   generate_partition_cube <- function(dates_vec, partition_name = NULL) {
     if (is.null(partition_name)) {partition_name <- "all"}
-    if (verbose) {cat("\r Processing partition:", partition_name, 
+    if (verbose) {cat("Processing partition:", partition_name, 
                       "( n =", length(dates_vec), ")")}
     
     requires_chunking <- length(dates_vec) > max_chunk_size
@@ -295,7 +279,7 @@ generate_prediction_cubes <- function(v, dates,
     #' @param tmp_chunks_path str, path to tmp chunks directory or NULL for no save
     #' @return stars object of predictions
     generate_prediction_chunk <- function(dates_chunk, tmp_chunks_path = NULL) {
-      if (verbose) {cat("\n Processing chunk: size", length(dates_chunk))}
+      if (verbose) {cat("\nProcessing chunk: size", length(dates_chunk))}
       
       coper_data <- retrieve_dynamic_coper_data(config, dates_chunk, 
                                                 ci_phys, ci_bgc, 
@@ -322,9 +306,7 @@ generate_prediction_cubes <- function(v, dates,
       coper_chunk <- apply_quantile_preds(v_wkfs, 
                                           coper_data, 
                                           desired_quants = desired_quants, 
-                                          verbose = verbose, 
-                                          parallel = parallel,
-                                          parallel_seed = config$model$seed)
+                                          verbose = verbose)
       rm(coper_data)
       coper_chunk <- coper_chunk |>
         st_as_stars(dims = c("lon", "lat", "date")) |>
@@ -402,30 +384,16 @@ generate_prediction_cubes <- function(v, dates,
                                     as_float = as_float)
     if (requires_chunking) { unlink(tmp_chunks_path, recursive = TRUE) }
     
-    cat("\n Partition Done! \n")
+    cat("\nPartition Done! \n")
     success
   }
-
-  #' Appropriate pass date vectors to generate_partition_cube and return
-  #' Using tryCatch to ensure that parallel plans are always reset to sequential
-  tryCatch({
-    if (parallel) {
-      # Bump up maximum passable dataset size
-      options(future.globals.maxSize = 1.0 * 1e9)  
-      plan(multisession, workers = 4)
-    }
-    
-    if (class(dates) == "Date") {
-      generate_partition_cube(dates, partition_name = NULL)
-    } else {
-      dates |>
-        imap(generate_partition_cube)
-    }
-  },
-  finally = { # Make sure parallel is turned off, regardless of error or not!
-    plan(sequential)
-    options(future.globals.maxSize = 500 * 1024 ^ 2) ## 500 MiB, default
-  })
+  
+  if (class(dates) == "Date") {
+    generate_partition_cube(dates, partition_name = NULL)
+  } else {
+    dates |>
+      imap(generate_partition_cube)
+  }
 }
 
 #' Generates data cubes for a version at yearly resolution
@@ -474,8 +442,7 @@ generate_yearly_cubes <- function(v,
                                    max_chunk_size = 74, 
                                    fold_subset = fold_subset,
                                    as_float = as_float,
-                                   add = add, 
-                                   parallel = FALSE)
+                                   add = add)
   
   # Are all entries a TRUE?? 
   if (!all(unlist(res) |> vapply(isTRUE, logical(1)))) {
