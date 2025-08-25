@@ -7,7 +7,7 @@ v <- "je.0.00"
 config <- read_config(v)
 
 ## Retrieve region polygons
-regions <- read_sf(dsn = "prediction_analyses/region_shapefiles/johnson2024_regions.shp") |>
+regions <- read_sf(dsn = "post_prediction/region_shapefiles/johnson2024_regions.shp") |>
   st_make_valid() |>
   st_transform(crs = 4326)
 ordered_reg <- c("MAB", "GoM", "WSS", "ESS", "swGSL", "nGSL", "NLS")

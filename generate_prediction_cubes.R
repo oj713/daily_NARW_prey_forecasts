@@ -239,7 +239,7 @@ generate_prediction_cubes <- function(v, dates,
   #' @return TRUE if successful OR stars object if no save
   generate_partition_cube <- function(dates_vec, partition_name = NULL) {
     if (is.null(partition_name)) {partition_name <- "all"}
-    if (verbose) {cat("Processing partition:", partition_name, 
+    if (verbose) {cat("\nProcessing partition:", partition_name, 
                       "( n =", length(dates_vec), ")")}
     
     requires_chunking <- length(dates_vec) > max_chunk_size
