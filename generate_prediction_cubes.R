@@ -115,7 +115,8 @@ retrieve_dynamic_coper_data <- function(config, dates, ci_phys, ci_bgc, diagnose
   coper_bgc <- NULL
   if (!is.null(vars$vars_bgc)) {
     coper_bgc <- get_coper_stars(ci_bgc, config$training_data$coper_data$vars_bgc) |>
-      st_warp(dest = coper_phys, method = "near")
+      st_warp(dest = coper_phys, method = "near") |>
+      correct_andreas(diagnose = diagnose)
   }
   
   # Combining into single dataset
@@ -239,7 +240,7 @@ generate_prediction_cubes <- function(v, dates,
   #' @return TRUE if successful OR stars object if no save
   generate_partition_cube <- function(dates_vec, partition_name = NULL) {
     if (is.null(partition_name)) {partition_name <- "all"}
-    if (verbose) {cat("Processing partition:", partition_name, 
+    if (verbose) {cat("\nProcessing partition:", partition_name, 
                       "( n =", length(dates_vec), ")")}
     
     requires_chunking <- length(dates_vec) > max_chunk_size
@@ -344,7 +345,7 @@ generate_prediction_cubes <- function(v, dates,
           map(~generate_prediction_chunk(.x, tmp_chunks_path))
         coper_preds <- c(recovered_chunks, coper_preds) # adding back recovered chunks
         
-        coper_preds <- Reduce(function(a, b) c(a, b, along = 3), coper_preds) |>
+        coper_preds <- do.call(c, c(coper_preds, along = 3)) |>
           st_set_dimensions("date", values = dates_vec)
         
         0
@@ -455,3 +456,65 @@ generate_yearly_cubes <- function(v,
     return(v_path(v, "preds", save_folder))
   }
 }
+
+################ POST PROCESSING CONSOLIDATION FUNCTION
+
+#' Retrieves monthly averages across a quantile stars set of files
+#' Consolidates into single object
+#' @param v str, version
+#' @param pred_folder str, folder name of pred hosting file
+#' @param as_float bool, save as float?
+#' @param verbose bool, print progress?
+#' @return file path to successfully saved consolidated stars
+consolidate_preds_monthly <- function(v, 
+                                      pred_folder = "daily_resolution", 
+                                      as_float = FALSE,
+                                      verbose = TRUE) {
+  # Retrieve and filter from folder to find eligible files
+  pred_path <- v_path(v, "preds", pred_folder)
+  preds_files <- list.files(pred_path, full.names = TRUE)
+  preds_files <- preds_files[grepl("_\\d{4}.nc$", preds_files)]
+  if (length(preds_files) == 0) {
+    stop("No eligible files for monthly consolidation found in folder:", pred_path)
+  }
+  
+  if (verbose) {cat("Consolidating... 0 /", length(preds_files))}
+  
+  #' Helper: Reads in single file, compresses to monthly resolution
+  #' @param preds_file str, path to file
+  #' @return quantile stars object consolidated by month
+  consolidate_file <- function(preds_file, idx) {
+    if (verbose) {cat("\rConsolidating...", idx, "/", length(preds_files))}
+    # Using aggregate function across months
+    qso_agg <- read_quantile_stars(preds_file) |>
+      aggregate(by = "months", mean)
+    gc() ## Memory-intensive to read in qso!
+    qso_agg
+  }
+  
+  consolidated_years <- preds_files |>
+    purrr::imap(consolidate_file)
+  
+  if(verbose) {cat("\rFormatting to return...           ")}
+  
+  consolidated_years <- readRDS("consolidated_years_temp.rds")
+  
+  return_stars <- do.call(c, c(consolidated_years, along = "time")) |>
+    aperm(c(2, 3, 1))
+  
+  # There used to be code here to rename the "time" dimension to "year_month"
+  # However this breaks as st_set_dimensions does not drill down across layers
+  
+  return_stars <- aperm(return_stars, c(2, 3, 1)) |>
+    st_set_dimensions(names = c("lon", "lat", "year_month"))
+  
+  write_quantile_stars(return_stars, v_pred_path(v, "monthly"), as_float = FALSE)
+  
+  rm(return_stars, consolidated_years)
+  gc()
+  save_file
+}      
+
+
+
+

@@ -143,7 +143,8 @@ correct_andreas <- function(stars_obj,
                                                       "uo" = -2, 
                                                       "bottomT" = -3, 
                                                       "vo" = 2.25, 
-                                                      "zos" = -1.88), 
+                                                      "zos" = -1.88, 
+                                                      "po4" = 0), 
                             diagnose = FALSE) {
   na_counts <- sapply(stars_obj, function(x) sum(is.na(x)))
   to_correct <- na_counts != min(na_counts)
@@ -273,13 +274,26 @@ var_abb <- function() {
 #' @param v model version
 #' @param ... additional path specifiers, ignoring NULL entries
 #' @return file path to version folder
-v_path <- function(v = "sp.0.00", ...) {
+v_path <- function(v = "spec.0.00", ...) {
   major <- (strsplit(v, '.', fixed = TRUE) |> unlist())[1:2] |>
     paste(collapse = ".")
   
   extras <- Filter(Negate(is.null), list(...))
   
   do.call(file.path, c(root, "versions", major, v, extras))
+}
+
+#' Retrieves path to a predictions file
+#' @param v str, version
+#' @param file_specifier str, unique identifier for pred file, e.g. subgroup
+#' @param pred_folder str, folder name of prediction set
+#' @return str path to pred file
+v_pred_path <- function(v,
+                        file_specifier,
+                        pred_folder = "daily_resolution") {
+  v_path(v, "preds", pred_folder, 
+         paste(c(species, pred_folder, file_specifier), collapse = "_") |>
+           paste0(".nc"))
 }
 
 #' Retrieves a model version from file
