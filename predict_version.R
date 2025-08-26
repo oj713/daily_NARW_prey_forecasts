@@ -5,6 +5,8 @@ source("setup.R")
 source("generate_prediction_cubes.R")
 
 v <- "coel.0.01"
+verbose <- TRUE
+as_float <- FALSE
 
 date_start = as.Date("1993-01-01")
 date_end = as.Date("2019-12-31")
@@ -16,8 +18,12 @@ res <- generate_yearly_cubes(v,
                              date_downsample = NULL,
                              fold_subset = NULL,
                              add = TRUE,
-                             verbose = TRUE, 
-                             as_float = FALSE)
+                             verbose = verbose, 
+                             as_float = as_float)
+
+if (read_config(v)$class == "jellyfish") {
+  consolidate_preds_monthly(v, verbose = verbose, as_float = as_float)
+}
 
 ## Test that things are working alright before running the final version
 if (FALSE) {
