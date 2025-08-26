@@ -115,7 +115,8 @@ retrieve_dynamic_coper_data <- function(config, dates, ci_phys, ci_bgc, diagnose
   coper_bgc <- NULL
   if (!is.null(vars$vars_bgc)) {
     coper_bgc <- get_coper_stars(ci_bgc, config$training_data$coper_data$vars_bgc) |>
-      st_warp(dest = coper_phys, method = "near")
+      st_warp(dest = coper_phys, method = "near") |>
+      correct_andreas(diagnose = diagnose)
   }
   
   # Combining into single dataset
@@ -496,13 +497,24 @@ consolidate_preds_monthly <- function(v,
   
   if(verbose) {cat("\rFormatting to return...           ")}
   
-  return_stars <- do.call(c, c(consolidated_years, along = "time"))
-  save_file <- file.path(pred_path, 
-                         paste(c(species, pred_folder, "monthly.nc"), collapse = "_"))
+  consolidated_years <- readRDS("consolidated_years_temp.rds")
   
-  write_quantile_stars(return_stars, save_file, as_float = FALSE)
+  return_stars <- do.call(c, c(consolidated_years, along = "time")) |>
+    aperm(c(2, 3, 1))
+  
+  # There used to be code here to rename the "time" dimension to "year_month"
+  # However this breaks as st_set_dimensions does not drill down across layers
+  
+  return_stars <- aperm(return_stars, c(2, 3, 1)) |>
+    st_set_dimensions(names = c("lon", "lat", "year_month"))
+  
+  write_quantile_stars(return_stars, v_pred_path(v, "monthly"), as_float = FALSE)
   
   rm(return_stars, consolidated_years)
   gc()
   save_file
-}
+}      
+
+
+
+

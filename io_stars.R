@@ -41,6 +41,9 @@ write_quantile_stars <- function(quantile_stars,
   if (substr(save_path, nchar(save_path)-2, nchar(save_path)) != ".nc") {
     stop("Incorrect file extension, requires .nc")
   }
+  if (file.exists(save_path)) { ## Avoid errors due to existing template
+    file.remove(save_path)
+  }
   
   suppressWarnings({
     stars::write_mdim(quantile_stars, save_path, as_float = as_float)
