@@ -3,29 +3,24 @@ source("setup.R")
 library(ecomon)
 library(twinkle)
 
-## Define each input species' abundance dataset
-jellyfish_df <- ecomon::scale_ecomon() |> 
-  select(c(lon, lat, date, ind_m2 = coel_m2)) |>
-  na.omit()
-
+## Define abundance datasets for species not pulling from scale::ecomon()
 cfin_df <- "/mnt/ecocast/projectdata/calanusclimate/src/vertical_correction_ecomon.csv.gz" |>
   readr::read_csv(col_types = readr::cols()) |>
   select(lon = longitude, lat = latitude, date, ind_m2 = corrected_CIV_CVI_m2)
 
-## Assemble into list
-species_list <- list(
-  "jellyfish" = jellyfish_df, 
-  "cfin" = cfin_df
-)
 
-#' Matches abundance records in a dataset to ALL available copernicus values. 
-#' Reference for static variables is physical copernicus
+#' Helper: Matches abundance records in a dataset to all available copernicus values. 
+#' Reference for static variables is physical copernicus.
 #' If new variables become available, this function must be modified. 
 #' @param spec_name str, species name
-#' @param abundance_df df, abundance values. Required columns lon, lat, date, ind_m2
+#' @param abundance_df df, abundance values. Required columns lon, lat, date
 #' @param verbose bool, print progress?
 #' @return df, matched abundance records with original columns + physical covariates
-match_abund_allcoper <- function(spec_name, abundance_df, verbose = TRUE) {
+match_dataset_copernicus <- function(abundance_df, verbose = TRUE) {
+  if (!all(c("lon", "lat", "date") %in% colnames(abundance_df))) {
+    stop("Abundance data frame requires columns lon, lat, and date.")
+  }
+  
   if (verbose) {cat("Starting matching...")}
   coper_infos <- list(
     "phys" = get_coper_info(region = "chfc", type = "phys"), 
@@ -142,16 +137,40 @@ match_abund_allcoper <- function(spec_name, abundance_df, verbose = TRUE) {
     rename(lon = X, lat = Y) |>
     na.omit()
   
-  
-  filepath <- file.path(get_root(spec_name), "input_data", paste0(spec_name, "_copernicus_matched.csv.gz"))
-  readr::write_csv(returnable_mac, filepath)
-  
   returnable_mac
 }
 
-res <- species_list |>
-  imap(~match_abund_allcoper(.y, .x, verbose = TRUE))
+#' Matches a specific species and saves to file. 
+#' @param species str, species name
+#' @param abundance_df df, abundance values. Required columns lon, lat, date, ind_m2
+#' @param verbose bool, print progress?
+#' @return filepath to saved object
+match_species_copernicus <- function(species, abundance_df, verbose = TRUE) {
+  if (!all(c("lon", "lat", "date", "ind_m2") %in% colnames(abundance_df))) {
+    stop("Abundance data frame requires columns lon, lat, date, and ind_m2.")
+  }
+  
+  mac <- match_dataset_copernicus(abundance_df, verbose = verbose)
+  filepath <- file.path(get_root(species), "input_data", paste0(species, "_copernicus_matched.csv.gz"))
+  readr::write_csv(mac, filepath)
+  
+  filepath
+}
 
+#' Matches ecomon dataframe with copernicus and saves to general data file
+#' @param ecomon_df df, ecomon dataset
+#' @param verbose bool, print progress?
+#' @return filepath to saved object
+match_ecomon_copernicus <- function(ecomon_df = ecomon::scale_ecomon(), verbose = TRUE) {
+  if ("time" %in% colnames(ecomon_df)) {
+    ecomon_df <- select(ecomon_df, -time)
+  }
+  mec <- match_dataset_copernicus(ecomon_df, verbose = verbose)
+  filepath <- get_path_main("_general_data", "ecomon_copernicus_matched.csv.gz")
+  readr::write_csv(mec, filepath)
+  
+  filepath
+}
 
 
 
