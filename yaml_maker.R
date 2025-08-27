@@ -14,9 +14,10 @@ coper_data_config <- list(vars_static = c("bathy_depth", "bathy_slope"),
                           vars_phys = c("bottomT", "mlotst", "so", "thetao", "vel", "zos"),
                           vars_bgc = c("chl", "no3", "nppv", "o2", "po4", "si"),
                           vars_time = c("day_length", "ddx_day_length"))
-species_data_config <- list(ecomon_column = "coel_m2", # currently unread
-                            alt_source = NULL, #"corrected_CIV_CVI_m2", # currently unread
-                            threshold = list(pre = 0, #30000,
+species_data_config <- list(ecomon_column = "coel_m2",
+                            # Prefix for saved data in input_data
+                            alt_source = NULL, #"corrected_CIV_CVI_m2" for cfin
+                            threshold = list(pre = 0, #30000 for cfin,
                                              post = NULL)) # currently unread
 # model
 seed <- 799

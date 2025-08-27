@@ -5,8 +5,21 @@ source("data_preparation/derive_calculated_variables.R")
 #' @param extra_vars str, optional override list of extra vars to retrieve
 #' @return df, input data for a model
 data_from_config <- function(config, extra_vars = NULL) {
-  
-  base_data <- get_input_data(paste0(species, "_copernicus_matched.csv.gz"))
+  # Read in base dataset from file based on config 
+  base_data <- NULL
+  ecomon_column <- config$training_data$species_data$ecomon_column
+  if (!is.null(ecomon_column)) { # Pulling a species from the broader ecomon dataset
+    base_data <- readr::read_csv(get_path_main("_general_data", "ecomon_copernicus_matched.csv.gz"),
+                                 col_types = readr::cols())
+    if (!(ecomon_column %in% colnames(base_data))) {
+      stop("Ecomon column", ecomon_column, "doesn't exist.")
+    }
+    base_data <- base_data |> rename(ind_m2 = !!sym(ecomon_column))
+    
+  } else { # Read from a custom save file
+    alt_source_file <- paste0(config$training_data$species_data$alt_source, "_copernicus_matched.csv.gz")
+    base_data <- get_input_data(alt_source_file)
+  }
   
   # Parse calculated variables, including extra vars
   all_variables <- config$training_data$coper_data |> unlist() |> as.vector()
