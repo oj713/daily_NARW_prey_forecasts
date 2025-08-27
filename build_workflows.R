@@ -122,6 +122,7 @@ init_v_wkf <- function(config, mec_folds, verbose = TRUE) {
     bind_rows()
   
   performance_summary <- get_performance_summary(config, wkf_augs)
+  if(verbose) {print(performance_summary)}
   
   save_path <- v_path(config$version)
   if (config$model$model$name == "MLP Neural Network") {

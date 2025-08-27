@@ -1,10 +1,11 @@
-v_num <- "0.01"
-overwrite <- TRUE
-class <- c("jellyfish", "right whale prey")[[1]] # What's the purpose of this data?
-species <- c("coelentrates", "cfin", "pseudocalanus", "centrophages")[[1]]
+v_num <- "0.00"
+overwrite <- FALSE
+species_class <- c("jellyfish", "right whale prey")[[1]] # What's the purpose of this data?
+species <- c("coelentrates", "cfin", "pseudocalanus", "centrophages", 
+             "combjellies", "siphonophora", "salpa")[[7]]
 v_name <- paste0(substr(species, 1, 4), ".", v_num)
 
-note <- "Bathymetric slope, multithreaded xgboost objects"
+note <- "Initial model for salps jellyfish, all variables, presence/absence"
 
 source("setup.R")
 
@@ -14,13 +15,14 @@ coper_data_config <- list(vars_static = c("bathy_depth", "bathy_slope"),
                           vars_phys = c("bottomT", "mlotst", "so", "thetao", "vel", "zos"),
                           vars_bgc = c("chl", "no3", "nppv", "o2", "po4", "si"),
                           vars_time = c("day_length", "ddx_day_length"))
-species_data_config <- list(ecomon_column = "coel_m2",
+species_data_config <- list(ecomon_column = c("coel_m2", "ctenop_m2", "siph_m2",
+                                              "salps_m2")[[4]],
                             # Prefix for saved data in input_data
                             alt_source = NULL, #"corrected_CIV_CVI_m2" for cfin
                             threshold = list(pre = 0, #30000 for cfin,
                                              post = NULL)) # currently unread
 # model
-seed <- 799
+seed <- 750
 
 brt <- list(name = "Boosted Regression Tree", 
             engine = "xgboost", 
@@ -44,7 +46,7 @@ model_config <- list(seed = seed,
                      transformations = transformations)
 
 config <- list(version = v_name, 
-               class = class,
+               class = species_class,
                note = note,
                training_data = training_data_config, 
                model = model_config)
