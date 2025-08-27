@@ -144,7 +144,8 @@ correct_andreas <- function(stars_obj,
                                                       "bottomT" = -3, 
                                                       "vo" = 2.25, 
                                                       "zos" = -1.88, 
-                                                      "po4" = 0), 
+                                                      "po4" = 0, 
+                                                      "no3" = 64.283), 
                             diagnose = FALSE) {
   na_counts <- sapply(stars_obj, function(x) sum(is.na(x)))
   to_correct <- na_counts != min(na_counts)
