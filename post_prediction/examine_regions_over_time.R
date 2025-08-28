@@ -82,7 +82,3 @@ observed_vs_predicted_regional <- function(v) {
   
   plots
 }
-
-
-
-

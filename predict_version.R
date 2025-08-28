@@ -26,8 +26,7 @@ for (vspec in versions_to_predict) {
                                verbose = verbose, 
                                as_float = TRUE)
   
-  consolidate_preds_monthly(v, verbose = verbose, as_float = FALSE)
-  
+  #consolidate_preds_monthly(v, verbose = verbose, as_float = FALSE)
   
   gc()
 }

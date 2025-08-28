@@ -10,6 +10,7 @@ suppressPackageStartupMessages(
     library(andreas)
     library(bundle) # for saving neural network model types (not that we have any atm)
     library(matrixStats) # for fast quantile processing
+    library(stringr) # for plot text formatting
   })
 
 #' Retrieves the path to the general repository for all project data
