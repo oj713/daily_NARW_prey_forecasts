@@ -478,7 +478,7 @@ consolidate_preds_monthly <- function(v,
     stop("No eligible files for monthly consolidation found in folder:", pred_path)
   }
   
-  if (verbose) {cat("Consolidating... 0 /", length(preds_files))}
+  if (verbose) {cat("\nConsolidating... 0 /", length(preds_files))}
   
   #' Helper: Reads in single file, compresses to monthly resolution
   #' @param preds_file str, path to file
@@ -497,22 +497,19 @@ consolidate_preds_monthly <- function(v,
   
   if(verbose) {cat("\rFormatting to return...           ")}
   
-  consolidated_years <- readRDS("consolidated_years_temp.rds")
-  
   return_stars <- do.call(c, c(consolidated_years, along = "time")) |>
-    aperm(c(2, 3, 1))
+    aperm(c(2, 3, 1)) 
+  return_stars <- st_set_crs(return_stars, 4326)
   
   # There used to be code here to rename the "time" dimension to "year_month"
   # However this breaks as st_set_dimensions does not drill down across layers
-  
-  return_stars <- aperm(return_stars, c(2, 3, 1)) |>
-    st_set_dimensions(names = c("lon", "lat", "year_month"))
+  # C'est pas grave
   
   write_quantile_stars(return_stars, v_pred_path(v, "monthly"), as_float = FALSE)
   
   rm(return_stars, consolidated_years)
   gc()
-  save_file
+  cat("\nConsolidated species:", species)
 }      
 
 
