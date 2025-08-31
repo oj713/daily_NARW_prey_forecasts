@@ -40,7 +40,7 @@ observed_vs_predicted_regional <- function(v) {
   ordered_reg <- c("Lower MAB", "Upper MAB", "GoM", "GB", "WSS", "ESS", "swGSL", "nGSL", "NLS")
   
   ## Retrieving base datasets for both predicted and observed
-  observed_sf <- data_from_config(config) |>
+  observed_sf <- data_from_config(read_config(v)) |>
     st_as_sf(crs = 4326, coords = c("lon", "lat")) |>
     st_join(regions) |>
     na.omit() |>
@@ -77,7 +77,7 @@ observed_vs_predicted_regional <- function(v) {
   plots <- list("month", "year") |> lapply(plot_time_type)
   
   pdf(v_path(v, "model", "observed_vs_predicted_regional.pdf"))
-  plots
+  print(plots)
   dev.off()
   
   plots
