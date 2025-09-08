@@ -1,7 +1,7 @@
 v_num <- "0.00"
 overwrite <- TRUE
 species_class <- c("jellyfish", "right whale prey")[[2]] # What's the purpose of this data?
-species <- c("coelentrates", "cfin", "pseudocalanus", "centropages", 
+species <- c("coelenterates", "cfin", "pseudocalanus", "centropages", 
              "combjellies", "siphonophora", "salpa")[[3]]
 v_name <- paste0(substr(species, 1, 4), ".", v_num)
 

@@ -52,10 +52,12 @@ root <- get_root(species)
 ################## GENERIC DATA RETRIEVAL AND SAVE HELPERS
 
 #' Creates a string based on date start and date end
-#' @param date_range, Dates, list of date_start and date_end
+#' @param dates_list, list of dates
 #' @param ... str, other characters
 #' @return str in format date_start_to_date_end_extra_args
-date_range_to_string <- function(date_range, ...) {
+date_range_to_string <- function(dates_list, ...) {
+  date_range <- range(dates_list)
+  
   paste(c(format(date_range[[1]], "%m_%d_%Y"),
         "to", 
         format(date_range[[2]], "%m_%d_%Y"), 
