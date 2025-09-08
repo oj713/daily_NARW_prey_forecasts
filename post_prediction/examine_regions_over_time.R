@@ -1,6 +1,5 @@
 source("data_preparation/data_from_config.R")
 source("io_stars.R")
-library(stringr)
 
 #' Plots the daily forecasts shapefile
 plot_region_polygons <- function() {
@@ -59,13 +58,16 @@ observed_vs_predicted_regional <- function(v) {
       summarize(meanpatch = mean(patch), numobs = n(), .groups = "drop_last")
     predicted_by_time <- predicted_sf |>
       group_by("tu" = get(time_type), geometry) |>
-      summarize(meanpred = mean(`50%`), .groups = "drop_last") |>
+      summarize(mean50 = mean(`50%`), mean5 = mean(`5%`), mean95 = mean(`95%`),
+                .groups = "drop_last") |>
       left_join(regions) |> dplyr::select(-geometry)
     
     # Plot
-    ggplot(observed_by_time, mapping = aes(x = tu, y = meanpatch)) +
-      geom_line(col = "palevioletred2") + geom_point(aes(size = numobs),  col = "palevioletred2") +
-      geom_line(data = predicted_by_time, aes(y = meanpred)) +
+    ggplot(observed_by_time, mapping = aes(x = tu)) +
+      geom_line(aes(y = meanpatch), col = "palevioletred2") + 
+      geom_point(aes(y = meanpatch, size = numobs),  col = "palevioletred2") +
+      geom_ribbon(data = predicted_by_time, aes(ymin = mean5, ymax = mean95), alpha = .2) +
+      geom_line(data = predicted_by_time, aes(y = mean50)) +
       facet_wrap(~id) +
       theme_bw() + 
       theme(legend.position = "bottom") + 

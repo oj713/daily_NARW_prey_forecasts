@@ -40,3 +40,5 @@ threshold_vs_performance(v, testing, save = TRUE)
 
 pred_vs_abund(v, testing, threshold, save = TRUE)
 
+input_data_distribution(v)
+
