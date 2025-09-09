@@ -1,12 +1,14 @@
 cat("Kicking off predictions ...\n")
 setwd("/mnt/ecocast/projects/students/ojohnson/daily-forecasts")
+species <- ""
+source("setup.R")
+source("generate_prediction_cubes.R") # generate predictions
+source("post_prediction/examine_regions_over_time.R") # analyses
+source("post_prediction/plots.R")
 
 versions_to_predict <- list(
-  list("spec" = "siphonophora", "v" = "siph.0.00"), # consolidate
-  list("spec" = "cfin", "v" = "cfin.0.01"), # consolidate
-  list("spec" = "coelentrates", "v" = "coel.0.01"), # preds + consolidate
-  list("spec" = "pseudocalanus", "v" = "pseu.0.00"), # preds + consolidate
-  list("spec" = "centropages", "v" = "cent.0.00") # preds + consolidate
+  list("spec" = "pseudocalanus", "v" = "pseu.0.00"), 
+  list("spec" = "centropages", "v" = "cent.0.00") 
 )
 
 for (vspec in versions_to_predict) {
@@ -14,8 +16,7 @@ for (vspec in versions_to_predict) {
   
   species <- vspec$spec
   cat("\n Kicking off species...", species)
-  source("setup.R")
-  source("generate_prediction_cubes.R")
+  root <- get_root(species)
   
   v <- vspec$v
   verbose <- TRUE
@@ -23,6 +24,7 @@ for (vspec in versions_to_predict) {
   date_start = as.Date("1993-01-01")
   date_end = as.Date("2019-12-31")
   
+  # Predictions
   res <- generate_yearly_cubes(v, 
                                date_start, 
                                date_end, 
@@ -33,6 +35,10 @@ for (vspec in versions_to_predict) {
                                as_float = as_float_gyc)
   
   consolidate_preds_monthly(v, verbose = verbose, as_float = FALSE)
+  
+  # Plots
+  observed_vs_predicted_regional(v)
+  plot_monthly_averages(v)
 }
 
 ## Test that things are working alright before running the final version
