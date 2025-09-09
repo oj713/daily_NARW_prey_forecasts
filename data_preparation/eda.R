@@ -80,10 +80,30 @@ get_abund_vs_var_plots <- function(data, col_names, filename = "var_vs_abund") {
   
   col_names |>
     map(get_abundance_variable_plot) |>
-    save_eda(filename)
+    save_eda_ecocast(filename)
 }
 
-
+#' Plots ecomon data in July
+explore_july <- function() {
+  ec <- ecomon::scale_ecomon() |> mutate(month = month(date))
+  
+  julyhistogram <- ggplot(filter(ec, month == 7), aes(x = date)) + 
+    geom_histogram(fill = "darkorange") + 
+    theme_bw() + 
+    labs(x = "Year", y = "Num records (line at 1993)", title= "Ecomon records in July over time") +
+    geom_vline(aes(xintercept = as.Date("1993-01-01")))
+  
+  ecjd_targets <- ec |>
+    filter(month == 7, year(date) > 1993) |>
+    select(lat, lon, date, coel_m2, salps_m2, 
+           calfin_m2, pseudo_m2, siph_m2, ctyp_m2)
+  
+  julyplot <- plot_gen(ecjd_targets[complete.cases(ecjd_targets),], "date", size = 1,
+                       title = "Ecomon July datapoints for target species")
+  
+  list(julyhistogram, julyplot) |>
+    save_eda_ecocast("july_explorations")
+}
 
 
 

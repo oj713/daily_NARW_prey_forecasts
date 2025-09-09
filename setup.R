@@ -10,6 +10,7 @@ suppressPackageStartupMessages(
     library(andreas)
     library(bundle) # for saving neural network model types (not that we have any atm)
     library(matrixStats) # for fast quantile processing
+    library(stringr) # for plot text formatting
   })
 
 #' Retrieves the path to the general repository for all project data
@@ -51,10 +52,12 @@ root <- get_root(species)
 ################## GENERIC DATA RETRIEVAL AND SAVE HELPERS
 
 #' Creates a string based on date start and date end
-#' @param date_range, Dates, list of date_start and date_end
+#' @param dates_list, list of dates
 #' @param ... str, other characters
 #' @return str in format date_start_to_date_end_extra_args
-date_range_to_string <- function(date_range, ...) {
+date_range_to_string <- function(dates_list, ...) {
+  date_range <- range(dates_list)
+  
   paste(c(format(date_range[[1]], "%m_%d_%Y"),
         "to", 
         format(date_range[[2]], "%m_%d_%Y"), 
@@ -144,7 +147,8 @@ correct_andreas <- function(stars_obj,
                                                       "bottomT" = -3, 
                                                       "vo" = 2.25, 
                                                       "zos" = -1.88, 
-                                                      "po4" = 0), 
+                                                      "po4" = 0, 
+                                                      "no3" = 64.283), 
                             diagnose = FALSE) {
   na_counts <- sapply(stars_obj, function(x) sum(is.na(x)))
   to_correct <- na_counts != min(na_counts)

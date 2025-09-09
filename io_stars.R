@@ -14,6 +14,7 @@ recover_interval_dims <- function(stars_obj, true_offset = 1/12) {
   # Extract values of dimensions that 1) need to be fixed and 2) are numeric
   dims_values <- expand_dimensions(stars_obj, center = FALSE)[needs_fixing]
   dims_values <- dims_values[sapply(dims_values, class) == "numeric"]
+  crs_orig <- st_crs(stars_obj)
   
   for (dim_name in names(dims_values)) {
     # Round values to the nearest (true_offset/2)th, dividing by 2 due to center behavior
@@ -22,7 +23,7 @@ recover_interval_dims <- function(stars_obj, true_offset = 1/12) {
     stars_obj <- st_set_dimensions(stars_obj, dim_name, values = fixed_values)
   }
   
-  stars_obj
+  st_set_crs(stars_obj, crs_orig)
 }
 
 

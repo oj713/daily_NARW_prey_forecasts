@@ -2,11 +2,16 @@ cat("Kicking off predictions ...\n")
 setwd("/mnt/ecocast/projects/students/ojohnson/daily-forecasts")
 
 versions_to_predict <- list(
-  list("spec" = "salpa", "v" = "salp.0.00"),
-  list("spec" = "siphonophora", "v" = "siph.0.00")
+  list("spec" = "siphonophora", "v" = "siph.0.00"), # consolidate
+  list("spec" = "cfin", "v" = "cfin.0.01"), # consolidate
+  list("spec" = "coelentrates", "v" = "coel.0.01"), # preds + consolidate
+  list("spec" = "pseudocalanus", "v" = "pseu.0.00"), # preds + consolidate
+  list("spec" = "centropages", "v" = "cent.0.00") # preds + consolidate
 )
 
 for (vspec in versions_to_predict) {
+  gc()
+  
   species <- vspec$spec
   cat("\n Kicking off species...", species)
   source("setup.R")
@@ -14,6 +19,7 @@ for (vspec in versions_to_predict) {
   
   v <- vspec$v
   verbose <- TRUE
+  as_float_gyc <- read_config(v)$class == "jellyfish"
   date_start = as.Date("1993-01-01")
   date_end = as.Date("2019-12-31")
   
@@ -24,13 +30,9 @@ for (vspec in versions_to_predict) {
                                fold_subset = NULL,
                                add = TRUE,
                                verbose = verbose, 
-                               as_float = TRUE)
+                               as_float = as_float_gyc)
   
-  if (read_config(v)$class == "jellyfish") {
-    consolidate_preds_monthly(v, verbose = verbose, as_float = FALSE)
-  }
-  
-  gc()
+  consolidate_preds_monthly(v, verbose = verbose, as_float = FALSE)
 }
 
 ## Test that things are working alright before running the final version

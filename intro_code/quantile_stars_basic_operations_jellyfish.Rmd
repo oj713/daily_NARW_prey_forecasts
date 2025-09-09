@@ -1,0 +1,109 @@
+---
+title: "Quantile stars objects for Jellyfish: basic operations"
+output: html_document
+---
+
+```{r}
+suppressPackageStartupMessages({
+  library(dplyr) 
+  library(stars)
+  library(sf)
+  library(ggplot2) # For plotting
+})
+
+source("helper_functions.R")
+# Replace this with the path to the stars object
+stars_path <- "/mnt/ecocast/projectdata/students/ojohnson/copernicus/salpa/versions/salp.0/salp.0.00/preds/daily_resolution/salpa_daily_resolution_monthly.nc"
+file.exists(stars_path)
+```
+
+Quantile stars objects are saved to folder using the `stars::write_mdim()` function. We can read them in using `stars::read_mdim(file_path)` or by using the custom `read_quantile_stars()` method defined in `helper_functions.R`. Stars are saved as netCDF objects (".nc" file extension)
+
+* `write_mdim()` has optional boolean argument `as_float`. If it's TRUE, values in the stars object are saved as floats, else they're saved as doubles. I'm providing copies of the data with *double* values, which also doubles the file size (2.2 GB vs. 1.1 GB). However, this means that `read_mdim()` correctly interprets the stars object as having a regular dimension grid, rather than irregular values. If you choose to save an object with float values to save on storage, you can use `read_quantile_stars()` and/or `recover_interval_dims()` in `helper_functions.R` to "fix" incorrect irregular dimensions. 
+
+
+```{r}
+# Read in the data
+example_stars <- stars_path |> stars::read_mdim()
+
+# If you want to fix incorrect irregular dimensions (not necessary for the files i provided), 
+# pass it to recover_interval_dims()
+example_stars <- recover_interval_dims(example_stars)
+
+example_stars
+```
+
+Stars objects are 3D data cubes with multiple attributes. For our case, each attribute is a quantile percentage of predictions (i.e. 0/50/100 corresponds to min/median/max of predictions across all model folds). Dimensions are specified across longitude, latitude, and month-of-year ("time") using CRS 4326. NA values correspond to land.
+
+* Each month-of-year is represented as the first day of said month-year I.e. July 1999 is "07-01-1999". 
+
+Stars objects can be subset using square bracket notation. They can be autoplot using the `plot()` function (ugly) or using ggplot and `geom_stars()` (less ugly). 
+
+```{r}
+# Stars_object[attribute_subset, x_subset, y_subset, date_subset]
+example_50perc_Jan1993 <- example_stars["50%",,,1]
+
+basic_plot_stars <- function(stars_obj, title) {
+  ggplot() + 
+  geom_stars(data = stars_obj) + # make sure to pass the data here, not to ggplot()!
+  theme_bw() + 
+  coord_quickmap() +
+  scale_fill_distiller(palette = "Spectral", na.value = "transparent") +
+  labs(x = "Longitude", y = "Latitude", title = title)
+}
+
+basic_plot_stars(example_50perc_Jan1993, "January 1993 salpa median patch probability")
+```
+
+Use `st_get_dimension_values()` to retrieve the actual values of any specific dimension. 
+
+```{r}
+# Examining the first ten month-years in the example stars object
+st_get_dimension_values(example_stars, which = "time")[1:10]
+```
+
+It's easy to create new attributes from scratch or based on existing attributes using similar notation to dataframes. 
+
+```{r}
+example_stars$max_minus_min <- example_stars$`100%` - example_stars$`0%`
+
+basic_plot_stars(example_stars["max_minus_min",,,1], "January 1993 salpa range in patch probability")
+```
+
+Stars objects can be altered to match different spatial geometries and extents using `st_crop`, `st_transform()`, and `st_warp()`. 
+
+```{r}
+# Crop extent to gulf of maine
+cropped_stars <- st_crop(example_50perc_Jan1993, 
+                         sf::st_bbox(c(xmin = -72.5, xmax = -62.5, ymin = 40, ymax = 46),
+                                     crs = 4326))
+# Switch coordinate system to pseudo mercator
+stars_transformed_cropped <- st_transform(cropped_stars, crs = 3857) 
+
+# St_warp coerces one stars object to match another's dimensions/extent
+stars_warped <- st_warp(src = example_50perc_Jan1993, dest = stars_transformed_cropped)
+
+basic_plot_stars(stars_warped, "Transformed and cropped stars") + 
+  coord_sf(datum = NA) # Required to plot 3857 coord system
+```
+
+Finally, stars objects can be transformed to and from data frames using `as.data.frame()` and `st_as_stars()`. Be careful with filtering out rows, it can affect retransforming back into a stars object. 
+
+```{r}
+ex_df <- as.data.frame(example_50perc_Jan1993)
+
+head(ex_df)
+
+ex_df$land_mask <- !complete.cases(ex_df)
+
+st_as_stars(ex_df, dims = c("lon", "lat", "time"))
+```
+
+More resources about stars: 
+
+* [Merging stars objects](https://tmieno2.github.io/R-as-GIS-for-Economists/merging-stars-objects-using-c-and-st_mosaic.html)
+* [Official stars documentation](https://r-spatial.github.io/stars/index.html)
+
+Enjoy! 
+ 
+ 

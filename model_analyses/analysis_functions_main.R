@@ -338,3 +338,18 @@ pred_vs_abund <- function(v,
                   "predictions_vs_abundance", 
                   save = save)
 }
+
+#' Plots a faceted distribution of abundance over time
+input_data_distribution <- function(v) {
+  mec <- data_from_config(read_config(v))
+  mec <- mec |> mutate(month = lubridate::month(date))
+  
+  p <- plot_gen(mec, "ind_m2",
+           title = paste(str_to_title(v), "input abundance data by month"),
+           log_col = TRUE) + 
+    facet_wrap(~month) + 
+    theme(legend.position = "bottom")
+  
+  save_and_return(v, p, "input_abundance", save = TRUE)
+}
+
