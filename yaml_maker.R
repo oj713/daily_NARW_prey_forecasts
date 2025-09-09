@@ -1,25 +1,25 @@
-v_num <- "0.00"
+v_num <- "1.00"
 overwrite <- TRUE
 species_class <- c("jellyfish", "right whale prey")[[2]] # What's the purpose of this data?
-species <- c("coelenterates", "cfin", "pseudocalanus", "centropages", 
-             "combjellies", "siphonophora", "salpa")[[3]]
+species <- c("coelenterates", "pseudocalanus", "centropages", 
+             "combjellies", "siphonophora", "salpa", "cfin")[[6]]
 v_name <- paste0(substr(species, 1, 4), ".", v_num)
 
-note <- "Initial model for centropages, 30K threshold based on 85% percentile to match cfin"
+note <- "Salpa model, same as 0.01 but with revised ecomon dataset."
 
 source("setup.R")
 
 # training data 
 strata = "patch" # currently unread
-coper_data_config <- list(vars_static = c("bathy_depth"), #, "bathy_slope"),
+coper_data_config <- list(vars_static = c("bathy_depth", "bathy_slope"),
                           vars_phys = c("bottomT", "mlotst", "so", "thetao", "vel", "zos"),
-                          vars_bgc = NULL, # c("chl", "no3", "nppv", "o2", "po4", "si"),
+                          vars_bgc = c("chl", "no3", "nppv", "o2", "po4", "si"),
                           vars_time = c("day_length", "ddx_day_length"))
 species_data_config <- list(ecomon_column = c("coel_m2", "pseudo_m2", "ctyp_m2",
-                                              "ctenop_m2", "siph_m2", "salps_m2")[[2]],
+                                              "ctenop_m2", "siph_m2", "salps_m2")[[6]],
                             # Prefix for saved data in input_data
                             alt_source = NULL, #"corrected_CIV_CVI_m2" for cfin
-                            threshold = list(pre = c(0, 12000, 30000)[[2]],
+                            threshold = list(pre = c(0, 12000, 30000)[[1]],
                                              post = NULL)) # currently unread
 # model
 seed <- 750
