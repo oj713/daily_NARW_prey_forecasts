@@ -74,7 +74,7 @@ get_performance_summary <- function(config, testing_results) {
     bind_rows() |>
     pivot_wider(id_cols = wkf_id, names_from = .metric, values_from = .estimate) |>
     select(-wkf_id) |>
-    apply(2, function(col) quantile(col, probs = c(.05, .5, .95)))
+    apply(2, function(col) quantile(col, probs = c(.05, .5, .95), na.rm = TRUE))
   
   list_quantiles <- apply(quantiles, 2, function(x) list(x)) |>
     map(~.x[[1]] |> as.list() |> setNames(rownames(quantiles)))

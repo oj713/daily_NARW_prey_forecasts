@@ -7,8 +7,8 @@ source("post_prediction/examine_regions_over_time.R") # analyses
 source("post_prediction/plots.R")
 
 versions_to_predict <- list(
-  list("spec" = "pseudocalanus", "v" = "pseu.0.00"), 
-  list("spec" = "centropages", "v" = "cent.0.00") 
+  list("spec" = "coelenterates", "v" = "coel.1.00"), 
+  list("spec" = "siphonophora", "v" = "siph.1.00") 
 )
 
 for (vspec in versions_to_predict) {
@@ -65,5 +65,5 @@ ggplot() +
   facet_wrap("date") + 
   scale_fill_viridis(na.value = "transparent") + 
   theme_bw() + 
-  coord_quickmap()
+  coord_quickmap() + ggtitle(v)
 }
