@@ -106,18 +106,22 @@ get_input_data <- function(filename) {
 #' @return named list with copernicus path, date range, bounding box, 
 #'  resolution sorted by x/y/starting coord/step, meta database
 get_coper_info <- function(region = c("chfc", "nwa", "world")[[1]], 
-                           type = c("phys", "bgc", "static")[[1]]) {
-  if (type == "static") {
-    print("Type not supported.")
-    return(FALSE)
-  }
+                           type = c("phys", "bgc")[[1]],
+                           scope = c("past", "present")[[1]]) {
   
+  # Type checks
+  stopifnot(region %in% c("chfc", "nwa", "world"), 
+            type %in% c("phys", "bgc"),
+            scope %in% c("past", "present"))
+
   name_table = list(
-    phys = "GLOBAL_MULTIYEAR_PHY_001_030", 
-    bgc = "GLOBAL_MULTIYEAR_BGC_001_029"
+    phys = list(past = "GLOBAL_MULTIYEAR_PHY_001_030", 
+                present = "GLOBAL_ANALYSISFORECAST_PHY_001_024"),
+    bgc = list(past = "GLOBAL_MULTIYEAR_BGC_001_029",
+               present = "GLOBAL_ANALYSISFORECAST_BGC_001_028")
   )
   
-  coper_path <- file.path(region, name_table[[type]]) |>
+  coper_path <- file.path(region, name_table[[type]][[scope]]) |>
     copernicus_path()
   coper_DB <- coper_path |> read_database()
   date_range <- coper_DB$date |> range()
