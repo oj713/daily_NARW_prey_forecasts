@@ -93,6 +93,7 @@ apply_quantile_preds <- function(wkfs, data,
 retrieve_dynamic_coper_data <- function(config, dates, ci_phys, ci_bgc, diagnose = FALSE) {
   vars <- config$training_data$coper_data
   if ("vel" %in% vars$vars_phys) {vars$vars_phys <- c(vars$vars_phys, "uo", "vo")}
+  if ("bottomT" %in% vars$vars_phys) {vars$vars_phys <- c(vars$vars_phys, "tob")}
   if (is.null(vars$vars_phys)) {stop("At least one physical variable must be specified.")}
   
   #' Helper, retrieves stars data for dates and coper info object
@@ -103,9 +104,15 @@ retrieve_dynamic_coper_data <- function(config, dates, ci_phys, ci_bgc, diagnose
       stop("Date(s) unavailable in Copernicus: ", paste(dates[!date_available], collapse = ", "))
     }
     
-    coper_info$meta_db |>
+    res <- coper_info$meta_db |>
       filter(date %in% dates, variable %in% variables) |>
       read_andreas(coper_info$coper_path)
+    
+    if ("tob" %in% names(res)) {
+      res <- rename(res, bottomT = tob)
+    }
+    
+    res
   }
   
   # Extract physical variables and correct if necessary

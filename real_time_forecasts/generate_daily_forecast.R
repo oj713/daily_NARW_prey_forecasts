@@ -3,7 +3,7 @@ v <- "coel.1.00"
 source("setup.R")
 source("generate_prediction_cubes.R")
 
-dates <- seq(Sys.Date() - 7, Sys.Date() + 7, by = "days")
+dates <- seq(Sys.Date() - 2, Sys.Date() + 3, by = "days")
 
 generate_forecast <- function(v, dates) {
   config <- read_config(v)
@@ -12,5 +12,18 @@ generate_forecast <- function(v, dates) {
   # Covariate cube
   covariate_cube <- generate_covariate_cube(config, dates, scope = "present")
   
-  
+  coper_preds <- apply_quantile_preds(v_wkfs, 
+                                      covariate_cube, 
+                                      desired_quants = c(0.05, .5, .95), 
+                                      verbose = FALSE, 
+                                      na.ignore = TRUE)
+  coper_preds |>
+    st_as_stars(dims = c("lon", "lat", "date")) |>
+    st_set_crs(4326)
 }
+
+forecast_obj <- generate_forecast(v, dates)
+
+write_quantile_stars(forecast_obj, 
+                     paste0("real_time_forecasts/", date_range_to_string(dates), "_plaything.nc"),
+                     as_float = TRUE)

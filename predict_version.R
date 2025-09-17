@@ -7,8 +7,8 @@ source("post_prediction/examine_regions_over_time.R") # analyses
 source("post_prediction/plots.R")
 
 versions_to_predict <- list(
-  list("spec" = "coelenterates", "v" = "coel.1.00"), 
-  list("spec" = "siphonophora", "v" = "siph.1.00") 
+  list("spec" = "pseudocalanus", "v" = "pseu.0.01"), 
+  list("spec" = "centropages", "v" = "cent.0.01") 
 )
 
 for (vspec in versions_to_predict) {
