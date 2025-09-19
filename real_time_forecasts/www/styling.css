@@ -1,0 +1,85 @@
+@import url("https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap");
+:root {
+  --header-color-light: #02A5DD;
+  --header-color-dark: #1E4E7B;
+  --header-color-accent: #81AB1F;
+  --main-text-color: #444;
+  --border-color: #CCCCCC;
+  --background-accent-color: #EAF2F6;
+}
+
+body {
+  background-color: white;
+  font-family: 'Open Sans';
+  font-size: 14px;
+  line-height: 23px;
+  color: var(--main-text-color);
+}
+
+body .container-fluid {
+  padding: 0;
+}
+
+.header {
+  border-bottom: solid 2px var(--border-color);
+  font-weight: bold !important;
+  color: var(--header-color-light);
+  padding: 0em 1em 0em 2em;
+}
+
+.main {
+  padding: 1em;
+  max-width: 1200px;
+  margin: auto;
+}
+
+.footer {
+  background-color: var(--background-accent-color);
+  padding: 3em;
+  color: var(--header-color-dark);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.leaflet-plot-square{
+  font-weight: bold;
+  margin-bottom: 1em;
+}
+
+.leaflet-plot-square .shiny-text-output {
+  background-color: var(--header-color-dark);
+  color: white;
+  height: 5vh;
+  font-size: 1.2em;
+  padding: 0em .5em;
+  display: flex;
+  align-items: center;
+}
+
+.settings-sidebar {
+  display:flex;
+  flex-direction: column;
+  height: 94vh;
+}
+.settings-sidebar h3 {
+  font-weight: bold;
+  color: var(--header-color-dark);
+  font-size: 1.5em;
+  margin-top: .2em;
+}
+.settings-sidebar .control-label {
+  color: var(--header-color-accent);
+  font-size: 1.2em;
+}
+
+.display-info {
+  background-color: var(--background-accent-color);
+  flex-grow: 1;
+  padding: .5em;
+  margin-top: .5em;
+}
+
+
+
+
