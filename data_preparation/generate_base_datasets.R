@@ -71,7 +71,7 @@ match_dataset_copernicus <- function(abundance_df, verbose = TRUE) {
     date_split <- split(full_date_vec, ceiling(seq_along(full_date_vec)/size_max))
     
     #' Matches all abundance values to copernicus values for a specific date range
-    #' @param date_vec vct, list of dates. Max size determined by memory, suggested 1000
+    #' @param date_vec vct, list of dates.
     #' @return df, list of all abundance records matched to copernicus information
     match_date_chunk <- function(date_vec, index) {
       if (verbose) {cat("\r Processing", index, "/", length(date_split), coper_info$type, "chunks...")}
@@ -134,8 +134,7 @@ match_dataset_copernicus <- function(abundance_df, verbose = TRUE) {
     bind_cols(st_coordinates(matched_abund_allcoper),
               st_drop_geometry(matched_abund_allcoper)) |>
     mutate(day_of_year = lubridate::yday(date)) |>
-    rename(lon = X, lat = Y) |>
-    na.omit()
+    rename(lon = X, lat = Y)
   
   returnable_mac
 }

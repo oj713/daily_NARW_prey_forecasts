@@ -31,5 +31,6 @@ data_from_config <- function(config, extra_vars = NULL) {
     derive_calculated_variables(config, vars_override = vars_to_calc) |> 
     mutate(patch = (ind_m2 > config$training_data$species_data$threshold$pre) |>
              as.numeric() |> factor(levels = c("1", "0"))) |>
-    select(lon, lat, date, patch, ind_m2, all_of(all_variables))
+    select(lon, lat, date, patch, ind_m2, all_of(all_variables)) |>
+    na.omit()
 }

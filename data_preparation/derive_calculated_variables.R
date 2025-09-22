@@ -57,7 +57,7 @@ derive_calculated_variables <- function(data, config, vars_override = NULL) {
   
   # If a variable isn't yet accounted for, throw an error
   has_calc_function <- calculated_vars %in% names(var_function_map)
-  if (all(!has_calc_function)) {
+  if (any(!has_calc_function)) {
     stop("1+ variables have no calculation defined: ", 
          paste(calculated_vars[!has_calc_function], collapse = ", "))
   }
