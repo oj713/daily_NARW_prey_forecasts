@@ -162,8 +162,10 @@ retrieve_static_coper_data <- function(config) {
 #' @param config version yaml config
 #' @param dates Date, vector of desired dates
 #' @param scope string, using past or present prediction range?
+#' @param crop_sf sf, bounds for predictions or NULL if no bounds
 #' @return predictable tibble
-generate_covariate_cube <- function(config, dates, scope = c("past", "present")[[1]]) {
+generate_covariate_cube <- function(config, dates, scope = c("past", "present")[[1]],
+                                    crop_sf = NULL) {
   
   # Base information
   stopifnot(scope %in% c("past", "present"))
@@ -177,6 +179,9 @@ generate_covariate_cube <- function(config, dates, scope = c("past", "present")[
   coper_static <- retrieve_static_coper_data(config)
   for(attribute in names(coper_static)) {
     coper_data[[attribute]] <- coper_static[[attribute]]
+  }
+  if (!is.null(crop_sf)) {
+    coper_data <- coper_data[crop_sf]
   }
 
   # Converting to tibble and adding calculated variables

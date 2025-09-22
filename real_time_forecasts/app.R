@@ -1,6 +1,7 @@
 library(shiny)
 library(leaflet)
 library(leafem)
+library(leaflet.extras2)
 
 setwd("..")
 species <- "coelenterates"
@@ -9,14 +10,19 @@ source("setup.R")
 source("io_stars.R")
 
 if (FALSE) {
+  regions_sf <- read_sf(dsn = "post_prediction/daily_forecasts_regions/daily_forecasts_regions.shp") |>
+    st_make_valid() |>
+    st_transform(crs = 4326)
   ym_stars <- read_quantile_stars(v_pred_path(v, "monthly"))
+  ym_stars <- ym_stars[regions_sf]
   m_agg <- aggregate(ym_stars[c("5%", "50%", "95%"),,,], 
                      by = function(d) (lubridate::month(d)), FUN = mean)
   m_agg$Uncertainty <- m_agg$`95%` - m_agg$`5%`
   write_quantile_stars(m_agg, "real_time_forecasts/monthly_averages_plaything.nc")
+  rm(regions_sf, ym_stars, m_agg)
 }
 
-preds <- read_quantile_stars("real_time_forecasts/09_17_2025_to_09_22_2025_plaything.nc")
+preds <- read_quantile_stars("real_time_forecasts/09_20_2025_to_09_25_2025_plaything.nc")
 preds$Uncertainty <- preds$`95%` - preds$`5%`
 availableDates <- st_get_dimension_values(preds, "date")
 bounds <- st_bbox(preds) |> as.vector()

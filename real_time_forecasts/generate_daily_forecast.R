@@ -9,8 +9,13 @@ generate_forecast <- function(v, dates) {
   config <- read_config(v)
   v_wkfs <- get_v_wkfs(v)
   
+  regions_sf <- read_sf(dsn = "post_prediction/daily_forecasts_regions/daily_forecasts_regions.shp") |>
+    st_make_valid() |>
+    st_transform(crs = 4326)
+  
   # Covariate cube
-  covariate_cube <- generate_covariate_cube(config, dates, scope = "present")
+  covariate_cube <- generate_covariate_cube(config, dates, scope = "present", 
+                                            crop_sf = regions_sf)
   
   coper_preds <- apply_quantile_preds(v_wkfs, 
                                       covariate_cube, 
