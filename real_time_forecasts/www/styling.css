@@ -32,6 +32,12 @@ body .container-fluid {
   max-width: 1200px;
   margin: auto;
 }
+.top-row {
+  height: 90vh;
+}
+.bottom-row {
+  height: 60vh;
+}
 
 .footer {
   background-color: var(--background-accent-color);
@@ -45,8 +51,10 @@ body .container-fluid {
 .leaflet-plot-square{
   font-weight: bold;
   margin-bottom: 1em;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
-
 .leaflet-plot-square .shiny-text-output {
   background-color: var(--header-color-dark);
   color: white;
@@ -60,7 +68,7 @@ body .container-fluid {
 .settings-sidebar {
   display:flex;
   flex-direction: column;
-  height: 94vh;
+  height: 100%;
 }
 .settings-sidebar h3 {
   font-weight: bold;

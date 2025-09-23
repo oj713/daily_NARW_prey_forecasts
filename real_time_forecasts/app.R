@@ -55,20 +55,48 @@ leaflet_plot_general <- function(stars_obj, paletteColumn) {
     fitBounds(bounds[1], bounds[2], bounds[3], bounds[4])
 }
 
-starsLeafletOutput <- function(id, width, height) {
-  column(width = width, 
-         div(class = "leaflet-plot-square",
-             textOutput(paste0(id, "Title")),
-             leafletOutput(id, height = height)))
+starsLeafletOutput <- function(id, width) {
+  column(width = width, class = "leaflet-plot-square",
+         textOutput(paste0(id, "Title")),
+         leafletOutput(id, height = "100%"))
 }
 
 ui <- fluidPage(
+  tags$script(HTML("
+  var currentView = {};
+
+  function storeView(mapId) {
+    var map = $('#' + mapId).data('leaflet-map');
+    if (map) {
+      currentView[mapId] = {
+        center: map.getCenter(),
+        zoom: map.getZoom()
+      };
+    }
+  }
+
+  function restoreView(mapId) {
+    var map = $('#' + mapId).data('leaflet-map');
+    if (map && currentView[mapId]) {
+      map.setView(currentView[mapId].center, currentView[mapId].zoom);
+      currentView[mapId] = {};
+    }
+  }
+
+  Shiny.addCustomMessageHandler('storeLeafletView', function(mapId) {
+    storeView(mapId);
+  });
+
+  Shiny.addCustomMessageHandler('restoreLeafletView', function(mapId) {
+    restoreView(mapId);
+  });
+  ")),
   includeCSS("www/styling.css"),
   div(class = "header", 
       h2("EcoMon daily species patch forecasts")),
   div(class = "main",
-    fluidRow(
-      starsLeafletOutput("dailyPlot", 9, "90vh"),
+    fluidRow(class = "top-row",
+      starsLeafletOutput("dailyPlot", 9),
       column(width = 3, class = "settings-sidebar",
              h3("Options"),
              selectInput("plotSpecies", 
@@ -89,9 +117,9 @@ ui <- fluidPage(
              div(class = "display-info",
                  "Additional information or plots here based on selected point/other criteria!"))
     ),
-    fluidRow(
-      starsLeafletOutput("monthlyAveragePlot", 6, "45vh"),
-      starsLeafletOutput("comparisonPlot", 6, "45vh")
+    fluidRow(class = "bottom-row",
+      starsLeafletOutput("monthlyAveragePlot", 6),
+      starsLeafletOutput("comparisonPlot", 6)
     )),
   div(class = "footer", 
       div("Contact: Omi Johnson"),
@@ -136,11 +164,21 @@ server <- function(input, output, session) {
     list(input$plotDate,input$plotColumn)
   })
   
+  # Sync maps and restore zoom level
   observeEvent(toListen(), {
-    leafletProxy("dailyPlot") |>
-      addLeafletsync(c("dailyPlot","monthlyAveragePlot", "comparisonPlot"), 
-                     options = leafletsyncOptions(syncCursor = FALSE))
-  })
+    session$sendCustomMessage("storeLeafletView", "dailyPlot")
+  }, priority = 1000) # High priority
+  
+  observeEvent(toListen(), {
+    # Schedule restoration for next tick
+    session$onFlushed(function() {
+      session$sendCustomMessage("restoreLeafletView", "dailyPlot")
+      
+      leafletProxy("dailyPlot") |>
+        addLeafletsync(c("dailyPlot", "monthlyAveragePlot", "comparisonPlot"),
+                       options = leafletsyncOptions(syncCursor = FALSE))
+    }, once = TRUE)
+  }, priority = -1000) # Low priority
 }
 
 shinyApp(ui, server)
