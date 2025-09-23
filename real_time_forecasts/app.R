@@ -31,7 +31,13 @@ monthly_averages <- read_quantile_stars("real_time_forecasts/monthly_averages_pl
 
 setwd("real_time_forecasts")
 
-leaflet_plot_general <- function(stars_obj, paletteColumn) {
+create_base_leaflet <- function() {
+  leaflet() |>
+    addProviderTiles("OpenStreetMap") |>
+    fitBounds(bounds[1], bounds[2], bounds[3], bounds[4])
+}
+
+add_starsdata_to_leaflet <- function(proxy, stars_obj, paletteColumn) {
   colorOptionsObj <- (
     if (paletteColumn == "Difference") {
       colorOptions(
@@ -47,12 +53,12 @@ leaflet_plot_general <- function(stars_obj, paletteColumn) {
     )
   })
   
-  leaflet() |>
-    addProviderTiles("OpenStreetMap") |>
+  proxy |>
+    clearGroup(paletteColumn) |>
     leafem::addGeoRaster(stars_obj,
                          colorOptions = colorOptionsObj,
-                         resolution = 192, autozoom = FALSE) |>
-    fitBounds(bounds[1], bounds[2], bounds[3], bounds[4])
+                         resolution = 192, autozoom = FALSE,
+                         group = paletteColumn)
 }
 
 starsLeafletOutput <- function(id, width) {
@@ -62,35 +68,6 @@ starsLeafletOutput <- function(id, width) {
 }
 
 ui <- fluidPage(
-  tags$script(HTML("
-  var currentView = {};
-
-  function storeView(mapId) {
-    var map = $('#' + mapId).data('leaflet-map');
-    if (map) {
-      currentView[mapId] = {
-        center: map.getCenter(),
-        zoom: map.getZoom()
-      };
-    }
-  }
-
-  function restoreView(mapId) {
-    var map = $('#' + mapId).data('leaflet-map');
-    if (map && currentView[mapId]) {
-      map.setView(currentView[mapId].center, currentView[mapId].zoom);
-      currentView[mapId] = {};
-    }
-  }
-
-  Shiny.addCustomMessageHandler('storeLeafletView', function(mapId) {
-    storeView(mapId);
-  });
-
-  Shiny.addCustomMessageHandler('restoreLeafletView', function(mapId) {
-    restoreView(mapId);
-  });
-  ")),
   includeCSS("www/styling.css"),
   div(class = "header", 
       h2("EcoMon daily species patch forecasts")),
@@ -140,45 +117,38 @@ server <- function(input, output, session) {
   })
   
   output$dailyPlot <- renderLeaflet({
-    leaflet_plot_general(plot_reflayer()[input$plotColumn,,], input$plotColumn)
+    create_base_leaflet() |>
+      addLeafletsync(c("dailyPlot", "monthlyAveragePlot", "comparisonPlot"),
+                     options = leafletsyncOptions(syncCursor = FALSE))
   })
   output$dailyPlotTitle <- renderText({
     paste(str_to_title(species), input$plotColumn, "predictions: ", input$plotDate)
   })
   
-  output$monthlyAveragePlot <- renderLeaflet({
-    leaflet_plot_general(plot_reflayer()["historical_month",,], input$plotColumn)
-  })
+  output$monthlyAveragePlot <- renderLeaflet({ create_base_leaflet() })
   output$monthlyAveragePlotTitle <- renderText({
     paste("Average", input$plotColumn, "prediction:", month.name[month(input$plotDate)])
   })
   
-  output$comparisonPlot <- renderLeaflet({
-    leaflet_plot_general(plot_reflayer()["difference",,], "Difference")
-  })
+  output$comparisonPlot <- renderLeaflet({ create_base_leaflet() })
   output$comparisonPlotTitle <- renderText({
     "Difference from average prediction"
   })
   
-  toListen <- reactive({
-    list(input$plotDate,input$plotColumn)
+  # Replace data layers as appropriate
+  observeEvent(plot_reflayer(), {
+    add_starsdata_to_leaflet(leafletProxy("dailyPlot"), 
+                    plot_reflayer()[input$plotColumn,,], 
+                    input$plotColumn)
+    
+    add_starsdata_to_leaflet(leafletProxy("monthlyAveragePlot"), 
+                    plot_reflayer()["historical_month",,], 
+                    input$plotColumn)
+    
+    add_starsdata_to_leaflet(leafletProxy("comparisonPlot"), 
+                    plot_reflayer()["difference",,], 
+                    "Difference")
   })
-  
-  # Sync maps and restore zoom level
-  observeEvent(toListen(), {
-    session$sendCustomMessage("storeLeafletView", "dailyPlot")
-  }, priority = 1000) # High priority
-  
-  observeEvent(toListen(), {
-    # Schedule restoration for next tick
-    session$onFlushed(function() {
-      session$sendCustomMessage("restoreLeafletView", "dailyPlot")
-      
-      leafletProxy("dailyPlot") |>
-        addLeafletsync(c("dailyPlot", "monthlyAveragePlot", "comparisonPlot"),
-                       options = leafletsyncOptions(syncCursor = FALSE))
-    }, once = TRUE)
-  }, priority = -1000) # Low priority
 }
 
 shinyApp(ui, server)
