@@ -32,3 +32,4 @@ forecast_obj <- generate_forecast(v, dates)
 write_quantile_stars(forecast_obj, 
                      paste0("real_time_forecasts/", date_range_to_string(dates), "_plaything.nc"),
                      as_float = TRUE)
+

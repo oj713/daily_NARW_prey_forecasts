@@ -6,6 +6,7 @@
   --main-text-color: #444;
   --border-color: #CCCCCC;
   --background-accent-color: #EAF2F6;
+  --delete-color: #D83838;
 }
 
 body {
@@ -81,13 +82,19 @@ body .container-fluid {
   font-size: 1.2em;
 }
 
-.display-info {
+div#selectedCoordInfo {
   background-color: var(--background-accent-color);
   flex-grow: 1;
   padding: .5em;
   margin-top: .5em;
 }
 
-
+button {
+  background-color: var(--delete-color);
+  position: absolute;
+  margin: auto;
+  bottom: .5em;
+  color: white;
+}
 
 
