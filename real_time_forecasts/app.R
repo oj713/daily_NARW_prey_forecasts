@@ -26,7 +26,7 @@ if (FALSE) {
   rm(regions_sf, ym_stars, m_agg)
 }
 
-preds <- read_quantile_stars("real_time_forecasts/09_25_2025_to_09_30_2025_plaything.nc")
+preds <- read_quantile_stars("real_time_forecasts/09_28_2025_to_10_03_2025_plaything.nc")
 preds$Uncertainty <- preds$`95%` - preds$`5%`
 availableDates <- st_get_dimension_values(preds, "date")
 bounds <- st_bbox(preds) |> as.vector()
@@ -40,9 +40,10 @@ setwd("real_time_forecasts")
 #' Render a basic leaflet map for later data overlay.
 #' @return leaflet object with appropriate styling and bounds
 create_base_leaflet <- function() {
-  leaflet() |>
+  leaflet(options = leafletOptions(minZoom = 4)) |>
     addProviderTiles("OpenStreetMap") |>
     fitBounds(bounds[1], bounds[2], bounds[3], bounds[4]) |>
+    setMaxBounds(bounds[1] - 20, bounds[2] - 15, bounds[3] + 20, bounds[4] + 15) |>
     addMouseCoordinates(
       css = list(
         "position" = "absolute", 
@@ -62,27 +63,45 @@ create_base_leaflet <- function() {
 #' @param paletteColumn, str, plot column that dictates color palette of raster
 #' @return nothing, adds raster image of stars object to leaflet proxy
 add_starsdata_to_leaflet <- function(proxy, stars_obj, paletteColumn) {
-  colorOptionsObj <- 
+  legendResolution = 7
+  
+  paletteSettings <- 
     (if (paletteColumn == "Difference") {
-      colorOptions(
-        palette = colorRampPalette(c("darkorchid4", "darkslateblue", "royalblue3", "deepskyblue2",
-                    "white", "goldenrod2", "darkorange1", "orangered3", "red4")),
-        domain = c(-0.5, 0.5),
-        na.color = "transparent")
+      palette = colorRampPalette(c("darkorchid4", "darkslateblue", "royalblue3", "deepskyblue2",
+                                   "white", "goldenrod2", "darkorange1", "orangered3", "red4"))
+      
+      list(
+        "colorOptionsObj" = colorOptions(palette = palette, domain = c(-0.5, 0.5), 
+                                       na.color = "transparent"),
+        "colors" = rev(palette(legendResolution)),
+        "labels" = seq(.5, -.5, length.out = legendResolution) |> round(2) |> as.character(),
+        "title" = "Deviation from avg. month"
+      )
     } else {
-      colorOptions(
-        palette = function(n) viridis(n, option = ifelse(paletteColumn == "Uncertainty", 
-                                                         "inferno", "viridis")),
-        na.color = "transparent"
-    )
+      palette = function(n) viridis(n, option = ifelse(paletteColumn == "Uncertainty", 
+                                                       "inferno", "viridis"))
+      
+      list(
+        "colorOptionsObj" = colorOptions(palette = palette, 
+                                         domain = c(0, 1), na.color = "transparent"),
+        "colors" = rev(palette(legendResolution)),
+        "labels" = seq(100, 0, length.out = legendResolution) |> round() |> 
+          as.character() |> paste0("%"),
+        "title" = ifelse(paletteColumn == "Uncertainty", paletteColumn, 
+                         paste(paletteColumn, "probability"))
+      )
   })
-
+  
   proxy |>
+    clearControls() |>
     leafem::addGeoRaster(stars_obj,
-                         colorOptions = colorOptionsObj,
+                         colorOptions = paletteSettings$colorOptionsObj,
                          resolution = 192, autozoom = FALSE,
-                         layerId = "active_raster", 
-                         imagequery = FALSE)
+                         layerId = "active_raster",
+                         imagequery = FALSE) |>
+    addLegend("bottomright", colors = paletteSettings$colors, 
+              labels = paletteSettings$labels, opacity = 1) 
+              #title = paletteSettings$title)
 }
 
 #' UI element block to render a Leaflet Stars in this project
@@ -116,21 +135,37 @@ extract_reflayer_values <- function(stars_obj, lon, lat) {
   }, error = function(e) {return(NA)})
 }
 
+###################################### OTHER PLOTS
+
+point_over_time <- function(lon, lat, date) {
+  plottableData <- extract_reflayer_values(preds, lon, lat) |>
+    as_tibble()
+  
+  ggplot(plottableData, aes(x = date)) +
+    geom_ribbon(aes(ymin = `5%`, ymax = `95%`), fill = "steelblue3", alpha = .5) + 
+    geom_line(aes(y = `50%`), color = "steelblue4") + 
+    theme_bw() + 
+    ylim(0, 1) +
+    labs(x = element_blank(), y = "Patch probability") + 
+    geom_vline(xintercept = date, color = "red") + 
+    theme(panel.background = element_rect(fill = "transparent"))
+}
+
+
 ###################################### BUILDING THE APPLICATION 
 
 ui <- fluidPage(
   includeCSS("www/styling.css"),
   div(class = "header", 
-      h2("EcoMon daily species patch forecasts")),
+      h2("EcoMon daily species patch forecasts"),
+      selectInput("plotSpecies", label = NULL,
+                  choices = c("Coelenterates", "Other [not implemented]"), 
+                  selected = "Coelenterates")),
   div(class = "main",
     fluidRow(class = "top-row",
       starsLeafletOutput("dailyPlot", 9),
       column(width = 3, class = "settings-sidebar",
              h3("Options"),
-             selectInput("plotSpecies", 
-                         label = "Species:",
-                         choices = c("Coelenterates", "Other [not implemented]"), 
-                         selected = "Coelenterates"),
              sliderInput("plotDate",
                          label = "Date:",
                          min = availableDates[[1]],
@@ -158,7 +193,7 @@ server <- function(input, output, session) {
   plot_reflayer <- reactive({
     req(input$plotDate, input$plotColumn)
     
-    preds_subset <- preds[input$plotColumn,,,which(availableDates == input$plotDate), drop = TRUE]
+    preds_subset <- preds[,,,which(availableDates == input$plotDate), drop = TRUE]
     preds_subset$historical_month <- monthly_averages[input$plotColumn, 
                                                       month(input$plotDate),, 
                                                       drop = TRUE]
@@ -297,9 +332,16 @@ server <- function(input, output, session) {
         imap(~paste0(.y, ": ", round(.x, 3)))
       
       return(div(HTML(paste(return_strings, collapse = "<br>")), 
-                 actionButton("deleteSelectedMarker", "Delete Marker")))
+                 plotOutput("pointOverTime", width = "100%", height = "10em"),
+                 actionButton("deleteSelectedMarker", "Delete Marker", 
+                              class = "deleteButton")))
     }
   })
+  output$pointOverTime <- renderPlot({
+    req(input$plotDate)
+    coords <- markers$data[active_marker(),]
+    point_over_time(coords$lon, coords$lat, input$plotDate)
+  }, bg = "transparent")
   
   # Deletes a marker
   observeEvent(input$deleteSelectedMarker, {
