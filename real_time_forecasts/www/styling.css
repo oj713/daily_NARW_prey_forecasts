@@ -6,6 +6,8 @@
   --main-text-color: #444;
   --border-color: #CCCCCC;
   --background-accent-color: #EAF2F6;
+  --delete-color: #D83838;
+  --delete-color-hover: #901515;
 }
 
 body {
@@ -32,6 +34,21 @@ body .container-fluid {
   max-width: 1200px;
   margin: auto;
 }
+.top-row {
+  height: 90vh;
+}
+.bottom-row {
+  height: 60vh;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+}
+.header #plotSpecies {
+  max-width: 25%;
+}
 
 .footer {
   background-color: var(--background-accent-color);
@@ -45,8 +62,10 @@ body .container-fluid {
 .leaflet-plot-square{
   font-weight: bold;
   margin-bottom: 1em;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
-
 .leaflet-plot-square .shiny-text-output {
   background-color: var(--header-color-dark);
   color: white;
@@ -60,7 +79,7 @@ body .container-fluid {
 .settings-sidebar {
   display:flex;
   flex-direction: column;
-  height: 94vh;
+  height: 100%;
 }
 .settings-sidebar h3 {
   font-weight: bold;
@@ -73,13 +92,25 @@ body .container-fluid {
   font-size: 1.2em;
 }
 
-.display-info {
+div#selectedCoordInfo {
   background-color: var(--background-accent-color);
   flex-grow: 1;
   padding: .5em;
   margin-top: .5em;
 }
 
-
+button.deleteButton {
+  background-color: var(--delete-color);
+  display: block;
+  position: absolute;
+  left: 50%;
+  bottom: 1em;
+  transform: translate(-50%, 0%);
+  color: white;
+}
+button.deleteButton#hover {
+  background-color: var(--delete-color-hover);
+  color: white;
+}
 
 
