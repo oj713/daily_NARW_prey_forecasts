@@ -8,7 +8,13 @@
 #' @return stars, stars object with appropriate dimensions fixed according to true_offset
 recover_interval_dims <- function(stars_obj, true_offset = 1/12) {
   # If offset is present for all variables then no fix is needed
-  needs_fixing <- data.frame(st_dimensions(stars_obj))$offset == "NA"
+  stob_dim_df <- data.frame(st_dimensions(stars_obj))
+  needs_fixing <- NULL
+  if ("offset" %in% colnames(stob_dim_df)) {
+    needs_fixing <- stob_dim_df$offset == "NA"
+  } else {
+    needs_fixing <- stob_dim_df$x.y != "" # fixing the lon/lat dimensions
+  }
   if (!any(needs_fixing)) {return(stars_obj)}
   
   # Extract values of dimensions that 1) need to be fixed and 2) are numeric

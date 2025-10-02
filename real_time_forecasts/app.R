@@ -23,7 +23,7 @@ if (FALSE) {
                      by = function(d) (lubridate::month(d)), FUN = mean)
   m_agg$Uncertainty <- m_agg$`95%` - m_agg$`5%`
   write_quantile_stars(m_agg, "real_time_forecasts/monthly_averages_plaything.nc")
-  rm(regions_sf, ym_stars, m_agg)
+  rm(ym_stars, m_agg)
 }
 
 preds <- read_quantile_stars("real_time_forecasts/09_28_2025_to_10_03_2025_plaything.nc")

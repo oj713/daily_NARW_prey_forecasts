@@ -38,7 +38,7 @@ generate_forecast <- function(v, dates) {
 shiny_species <- list(
   list("spec" = "coelenterates", "v" = "coel.1.00"), 
   list("spec" = "salpa", "v" = "salp.1.00"),
-  list("spec" = "combjellies", "v" = "comb.1.00")
+  list("spec" = "siphonophora", "v" = "siph.1.00")
 )
 
 for (shiny_spec in shiny_species) {
