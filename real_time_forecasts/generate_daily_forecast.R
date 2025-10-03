@@ -80,16 +80,14 @@ for (shiny_spec in shiny_species) {
       old_dates <- st_get_dimension_values(old_forecast_data, "date")
       dates_to_keep <- which(old_dates %in% forecast_dates)
       
-      old_forecast_data[,,,dates_to_keep] |>
-        st_set_dimensions("date", 
-                          values = old_dates[dates_to_keep]) |>
-        c(new_forecast_data, along = "date")
+      c(old_forecast_data[,,,dates_to_keep], new_forecast_data, along = "date") |>
+        st_set_dimensions("date", values = forecast_dates)
     })
     write_quantile_stars(forecast_data_tosave, forecast_path, as_float = TRUE)
   }
   
   # Adding new data to archive of all past forecasts for daily tool
-  if (!is.null(new_forecast_data)) {
+  if (FALSE) {#!is.null(new_forecast_data)) {
     calculated_dates <- st_get_dimension_values(new_forecast_data, which = "date")
     # Separate files by year
     for (yr in unique(year(calculated_dates))) {
