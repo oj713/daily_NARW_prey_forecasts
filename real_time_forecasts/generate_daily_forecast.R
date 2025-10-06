@@ -28,6 +28,8 @@ generate_forecast <- function(v, dates) {
                                       desired_quants = c(0.05, .5, .95), 
                                       verbose = FALSE, 
                                       na.ignore = TRUE)
+  coper_preds$uncertainty <- coper_preds$`95%` - coper_preds$`50%`
+  
   coper_preds |>
     st_as_stars(dims = c("lon", "lat", "date")) |>
     st_set_crs(4326)

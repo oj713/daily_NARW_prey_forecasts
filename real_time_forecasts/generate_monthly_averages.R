@@ -23,12 +23,6 @@ for (shiny_spec in shiny_species) {
   
   # Initializing directory
   monthly_root <- file.path(root, "shiny_data", "monthly_aggregates")
-  
-  # for (file in list.files(monthly_root, full.names = TRUE)) {
-  #   obj <- read_quantile_stars(file)
-  #   write_quantile_stars(obj[,,,1, drop = TRUE], file, as_float = TRUE)
-  # }
-
 
 
   if (dir.exists(monthly_root)) { next } else { dir.create(monthly_root, recursive = TRUE) }
@@ -39,7 +33,7 @@ for (shiny_spec in shiny_species) {
   ym_stars <- ym_stars[regions_sf]
   m_agg <- aggregate(ym_stars[c("5%", "50%", "95%"),,,],
                      by = function(d) (lubridate::month(d)), FUN = mean)
-  m_agg$Uncertainty <- m_agg$`95%` - m_agg$`5%`
+  m_agg$uncertainty <- m_agg$`95%` - m_agg$`5%`
 
   #' Helper: Extracts a single month from the aggregation object and saves to file
   save_month_qs <- function(m) {
