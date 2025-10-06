@@ -127,23 +127,25 @@ extract_reflayer_values <- function(stars_obj, lon, lat) {
 ###################################### OTHER PLOTS
 
 #' Plots the value of a spatial tile over available forecast dates
+#' @param stars_obj stars, stars object to use as base data
 #' @param lon dbl, longitude of pt
 #' @param lat dbl, latitude of pt
 #' @param date Date, date of focus
-point_over_time <- function(lon, lat, date) {
-  plottableData <- extract_reflayer_values(preds, lon, lat) |>
+point_over_time <- function(stars_obj, lon, lat, date) {
+  plottableData <- extract_reflayer_values(stars_obj, lon, lat) |>
     as_tibble()
   
-  ggplot(plottableData, aes(x = date)) +
-    geom_ribbon(aes(ymin = `5%`, ymax = `95%`), fill = "steelblue3", alpha = .5) + 
-    geom_line(aes(y = `50%`), color = "steelblue4") + 
-    theme_bw() + 
-    ylim(0, 1) +
-    labs(x = element_blank(), y = "Patch probability") + 
-    geom_vline(xintercept = date, color = "red") + 
-    theme(panel.background = element_rect(fill = "transparent"))
+  suppressWarnings(
+    ggplot(plottableData, aes(x = date)) +
+      geom_ribbon(aes(ymin = `5%`, ymax = `95%`), fill = "steelblue3", alpha = .5) + 
+      geom_line(aes(y = `50%`), color = "steelblue4") + 
+      theme_bw() + 
+      ylim(0, 1) +
+      labs(x = element_blank(), y = "Patch probability") + 
+      geom_vline(xintercept = date, color = "red") + 
+      theme(plot.background = element_blank())
+  )
 }
-
 
 ###################################### BUILDING THE APPLICATION 
 
@@ -359,9 +361,9 @@ server <- function(input, output, session) {
     }
   })
   output$pointOverTime <- renderPlot({
-    req(input$plotDate)
+    req(forecast_data(), input$plotDate)
     coords <- markers$data[active_marker(),]
-    point_over_time(coords$lon, coords$lat, input$plotDate)
+    point_over_time(forecast_data(), coords$lon, coords$lat, input$plotDate)
   }, bg = "transparent")
   
   # Deletes a marker
