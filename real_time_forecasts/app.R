@@ -212,10 +212,16 @@ server <- function(input, output, session) {
   plot_reflayer <- reactive({
     req(forecast_data(), month_aggregates_data(), input$plotDate, input$plotColumn)
     
+    # Forecast data for the specified date, keep all columns
     preds_subset <- forecast_data()[,,,which(availableDates == input$plotDate), drop = TRUE]
-    preds_subset$historical_month <- month_aggregates_data()[input$plotColumn,,,1,
-                                                               drop = TRUE]
+    
+    # Historical month comparison for specified column
+    month_char <- input$plotDate |> lubridate::month() |> as.character()
+    preds_subset$historical_month <- month_aggregates_data()[[month_char]][input$plotColumn,,]
+    
+    # Difference between present and historical
     preds_subset$difference <- preds_subset[[input$plotColumn]] - preds_subset$historical_month
+    
     st_crs(preds_subset) <- st_crs(forecast_data())
     preds_subset
   })
