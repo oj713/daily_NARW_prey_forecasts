@@ -6,32 +6,24 @@ library(leaflet.extras2)
 ######################################  Ugly data preparation code, to swap out
 
 #setwd("..")
-species <- "coelenterates"
-v <- "coel.1.00"
+species <- ""
 source("setup.R")
 source("io_stars.R")
-
 
 regions_sf <- read_sf(dsn = "post_prediction/daily_forecasts_regions/daily_forecasts_regions.shp") |>
   st_make_valid() |>
   st_transform(crs = 4326)
 
-if (FALSE) {
-  ym_stars <- read_quantile_stars(v_pred_path(v, "monthly"))
-  ym_stars <- ym_stars[regions_sf]
-  m_agg <- aggregate(ym_stars[c("5%", "50%", "95%"),,,], 
-                     by = function(d) (lubridate::month(d)), FUN = mean)
-  m_agg$Uncertainty <- m_agg$`95%` - m_agg$`5%`
-  write_quantile_stars(m_agg, "real_time_forecasts/monthly_averages_plaything.nc")
-  rm(ym_stars, m_agg)
+# Retrieve shiny path directory
+shiny_path <- function(species, ...) {
+  get_path_main(species, "shiny_data", ...)
 }
 
-preds <- read_quantile_stars("real_time_forecasts/09_28_2025_to_10_03_2025_plaything.nc")
-preds$Uncertainty <- preds$`95%` - preds$`5%`
-availableDates <- st_get_dimension_values(preds, "date")
-bounds <- st_bbox(preds) |> as.vector()
-
-monthly_averages <- read_quantile_stars("real_time_forecasts/monthly_averages_plaything.nc")
+template <- read_quantile_stars(shiny_path("coelenterates", "coelenterates_shiny_forecast_data.nc"))
+availableDates <- st_get_dimension_values(template, "date")
+bounds <- st_bbox(template) |> as.vector()
+predictionColumns <- names(template)
+rm(template)
 
 setwd("real_time_forecasts")
 
@@ -137,6 +129,10 @@ extract_reflayer_values <- function(stars_obj, lon, lat) {
 
 ###################################### OTHER PLOTS
 
+#' Plots the value of a spatial tile over available forecast dates
+#' @param lon dbl, longitude of pt
+#' @param lat dbl, latitude of pt
+#' @param date Date, date of focus
 point_over_time <- function(lon, lat, date) {
   plottableData <- extract_reflayer_values(preds, lon, lat) |>
     as_tibble()
@@ -159,8 +155,8 @@ ui <- fluidPage(
   div(class = "header", 
       h2("EcoMon daily species patch forecasts"),
       selectInput("plotSpecies", label = NULL,
-                  choices = c("Coelenterates", "Other [not implemented]"), 
-                  selected = "Coelenterates")),
+                  choices = c("coelenterates", "salpa", "siphonophora"), 
+                  selected = "coelenterates")),
   div(class = "main",
     fluidRow(class = "top-row",
       starsLeafletOutput("dailyPlot", 9),
@@ -175,7 +171,7 @@ ui <- fluidPage(
                          timeFormat = "%m/%d/%y"),
              selectInput("plotColumn", 
                          label = "Prediction Column:",
-                         choices = names(preds), 
+                         choices = predictionColumns, 
                          selected = "50%"),
              uiOutput("selectedCoordInfo"))
     ),
@@ -189,16 +185,38 @@ ui <- fluidPage(
 )
 
 server <- function(input, output, session) {
+  # Raw species data to read in
+  forecast_data <- reactive({
+    req(input$plotSpecies)
+    
+    fpath <- shiny_path(input$plotSpecies, paste0(input$plotSpecies, "_shiny_forecast_data.nc"))
+    
+    read_quantile_stars(fpath)
+  })
+  month_aggregates_data <- reactive({
+    req(input$plotSpecies)
+    
+    months <- availableDates |> lubridate::month() |> unique()
+    
+    months_stars <- months |>
+      lapply(function(m) {
+        mpath <- shiny_path(input$plotSpecies, "monthly_aggregates",
+                            paste0(input$plotSpecies, "_monthly_aggregate_m", m, ".nc"))
+        
+        read_quantile_stars(mpath)
+      }) |>
+      setNames(months)
+  })
+  
   # Dynamic plotted values - stars data on display, markers
   plot_reflayer <- reactive({
-    req(input$plotDate, input$plotColumn)
+    req(forecast_data(), month_aggregates_data(), input$plotDate, input$plotColumn)
     
-    preds_subset <- preds[,,,which(availableDates == input$plotDate), drop = TRUE]
-    preds_subset$historical_month <- monthly_averages[input$plotColumn, 
-                                                      month(input$plotDate),, 
-                                                      drop = TRUE]
+    preds_subset <- forecast_data()[,,,which(availableDates == input$plotDate), drop = TRUE]
+    preds_subset$historical_month <- month_aggregates_data()[input$plotColumn,,,1,
+                                                               drop = TRUE]
     preds_subset$difference <- preds_subset[[input$plotColumn]] - preds_subset$historical_month
-    st_crs(preds_subset) <- st_crs(preds)
+    st_crs(preds_subset) <- st_crs(forecast_data())
     preds_subset
   })
   markers <- reactiveValues(data = data.frame())

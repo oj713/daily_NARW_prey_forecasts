@@ -23,29 +23,34 @@ for (shiny_spec in shiny_species) {
   
   # Initializing directory
   monthly_root <- file.path(root, "shiny_data", "monthly_aggregates")
+  
+  # for (file in list.files(monthly_root, full.names = TRUE)) {
+  #   obj <- read_quantile_stars(file)
+  #   write_quantile_stars(obj[,,,1, drop = TRUE], file, as_float = TRUE)
+  # }
+
+
+
   if (dir.exists(monthly_root)) { next } else { dir.create(monthly_root, recursive = TRUE) }
   cat(species, "...")
-  
+
   # Creating the monthly aggregations object
   ym_stars <- read_quantile_stars(v_pred_path(v, "monthly"))
   ym_stars <- ym_stars[regions_sf]
-  m_agg <- aggregate(ym_stars[c("5%", "50%", "95%"),,,], 
+  m_agg <- aggregate(ym_stars[c("5%", "50%", "95%"),,,],
                      by = function(d) (lubridate::month(d)), FUN = mean)
   m_agg$Uncertainty <- m_agg$`95%` - m_agg$`5%`
-  
+
   #' Helper: Extracts a single month from the aggregation object and saves to file
   save_month_qs <- function(m) {
-    mdims <- dim(m_agg)[c(2, 3)]
-    m_agg_m <- m_agg[,m,,,drop = TRUE] |>
-      st_redimension(st_dimensions(lon = 1:mdims[[1]], lat = 1:mdims[[2]], month = 1)) |>
-      st_set_dimensions("month", values = m)
-    
     save_file <- file.path(monthly_root, paste0(species, "_monthly_aggregate_m", m, ".nc"))
-    
-    write_quantile_stars(m_agg_m, save_file, as_float = TRUE)
-    
+
+    write_quantile_stars(m_agg[,m,,,drop = TRUE], save_file, as_float = TRUE)
+
     TRUE
   }
-  
+
   success <- 1:12 |> lapply(save_month_qs)
 }
+
+
