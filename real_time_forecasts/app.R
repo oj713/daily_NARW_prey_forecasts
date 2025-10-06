@@ -4,28 +4,25 @@ library(leafem)
 library(leaflet.extras2)
 
 ######################################  Ugly data preparation code, to swap out
-
-#setwd("..")
+code_root <- "/mnt/ecocast/projects/students/ojohnson/daily-forecasts"
 species <- ""
-source("setup.R")
-source("io_stars.R")
-
-regions_sf <- read_sf(dsn = "post_prediction/daily_forecasts_regions/daily_forecasts_regions.shp") |>
-  st_make_valid() |>
-  st_transform(crs = 4326)
+source(file.path(code_root, "setup.R"))
+source(file.path(code_root, "io_stars.R"))
 
 # Retrieve shiny path directory
 shiny_path <- function(species, ...) {
   get_path_main(species, "shiny_data", ...)
 }
 
+regions_sf <- read_sf(dsn = file.path(code_root, "post_prediction/daily_forecasts_regions/daily_forecasts_regions.shp")) |>
+  st_make_valid() |>
+  st_transform(crs = 4326)
+
 template <- read_quantile_stars(shiny_path("coelenterates", "coelenterates_shiny_forecast_data.nc"))
 availableDates <- st_get_dimension_values(template, "date")
 bounds <- st_bbox(template) |> as.vector()
 predictionColumns <- names(template)
 rm(template)
-
-setwd("real_time_forecasts")
 
 ###################################### LEAFLET EDITING HELPER FUNCTIONS
 
