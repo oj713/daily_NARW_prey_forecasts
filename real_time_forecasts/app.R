@@ -8,6 +8,7 @@ code_root <- "/mnt/ecocast/projects/students/ojohnson/daily-forecasts"
 species <- ""
 source(file.path(code_root, "setup.R"))
 source(file.path(code_root, "io_stars.R"))
+source(file.path(code_root, "real_time_forecasts/theme_object_starter.R"))
 
 # Retrieve shiny path directory
 shiny_path <- function(species, ...) {
@@ -98,9 +99,12 @@ add_starsdata_to_leaflet <- function(proxy, stars_obj, paletteColumn) {
 #' @param width int, bootstrap column width 1-12
 #' @return bootstrap column with leaflet object
 starsLeafletOutput <- function(id, width) {
-  column(width = width, class = "leaflet-plot-square",
-         textOutput(paste0(id, "Title")),
-         leafletOutput(id, height = "100%"))
+  column(width = width, 
+         bigelow_card(
+           headerContent = textOutput(paste0(id, "Title")),
+           footerContent = NULL, # no footer here!
+           leafletOutput(id, height = "100%")
+         ))
 }
 
 #' Apply a function to all leaflet objects
@@ -150,13 +154,14 @@ point_over_time <- function(stars_obj, lon, lat, date) {
 ###################################### BUILDING THE APPLICATION 
 
 ui <- fluidPage(
-  includeCSS("www/styling.css"),
-  div(class = "header", 
+  theme = bigelow_theme(),
+  includeCSS("www/additionalStyles.css"),
+  bigelow_header(
       h2("EcoMon daily species patch forecasts"),
       selectInput("plotSpecies", label = NULL,
                   choices = c("coelenterates", "salpa", "siphonophora"), 
                   selected = "coelenterates")),
-  div(class = "main",
+  bigelow_main_body(
     fluidRow(class = "top-row",
       starsLeafletOutput("dailyPlot", 9),
       column(width = 3, class = "settings-sidebar",
@@ -177,10 +182,9 @@ ui <- fluidPage(
     fluidRow(class = "bottom-row",
       starsLeafletOutput("monthlyAveragePlot", 6),
       starsLeafletOutput("comparisonPlot", 6)
-    )),
-  div(class = "footer", 
-      div("Contact: Omi Johnson"),
-      img(src='images/bigelow_logo.svg', alt = "Bigelow Laboratory Logo"))
+    )
+  ),
+  bigelow_footer(div("Contact: Omi Johnson"))
 )
 
 server <- function(input, output, session) {
@@ -354,10 +358,10 @@ server <- function(input, output, session) {
                           values[1:(length(values) - 1)]) |>
         imap(~paste0(.y, ": ", round(.x, 3)))
       
-      return(div(HTML(paste(return_strings, collapse = "<br>")), 
+      return(tagList(HTML(paste(return_strings, collapse = "<br>")), 
                  plotOutput("pointOverTime", width = "100%", height = "10em"),
                  actionButton("deleteSelectedMarker", "Delete Marker", 
-                              class = "deleteButton")))
+                              class = "btn-danger")))
     }
   })
   output$pointOverTime <- renderPlot({

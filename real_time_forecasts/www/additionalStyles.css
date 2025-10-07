@@ -1,0 +1,32 @@
+.top-row {
+  height: 90vh;
+  margin-bottom: 1em;
+}
+.bottom-row {
+  height: 60vh;
+}
+
+.settings-sidebar {
+  display:flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+}
+div#selectedCoordInfo {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background-color: var(--bg-accent);
+  flex-grow: 1;
+  padding: .5em;
+  margin-top: .5em;
+  overflow-y: scroll;
+}
+
+#deleteSelectedMarker {
+  padding: .5em;
+  margin: 0 auto;
+  margin-top: auto;
+}
+
+
