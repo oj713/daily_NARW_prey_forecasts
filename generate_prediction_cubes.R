@@ -96,13 +96,16 @@ retrieve_dynamic_coper_data <- function(config, dates, ci_phys, ci_bgc, diagnose
   if ("bottomT" %in% vars$vars_phys) {vars$vars_phys <- c(vars$vars_phys, "tob")}
   if (is.null(vars$vars_phys)) {stop("At least one physical variable must be specified.")}
   
+  # Dates checking, throw warning if a date isn't available
+  date_available <- (dates %in% ci_phys$meta_db$date) & (dates %in% ci_bgc$meta_db$date)
+  if (!all(date_available)) {
+    warning("Date(s) unavailable in Copernicus: ", paste(dates[!date_available], collapse = ", "))
+    dates <- dates[date_available]
+    if (length(dates) == 0) {return(NULL)}
+  }
+  
   #' Helper, retrieves stars data for dates and coper info object
   get_coper_stars <- function(coper_info, variables) {
-    # Throw error if some requested dates aren't available
-    date_available <- dates %in% coper_info$meta_db$date
-    if (!all(date_available)) {
-      stop("Date(s) unavailable in Copernicus: ", paste(dates[!date_available], collapse = ", "))
-    }
     
     res <- coper_info$meta_db |>
       filter(date %in% dates, variable %in% variables) |>
@@ -176,6 +179,7 @@ generate_covariate_cube <- function(config, dates, scope = c("past", "present")[
   coper_data <- retrieve_dynamic_coper_data(config, dates, 
                                             ci_phys, ci_bgc, 
                                             diagnose = TRUE)
+  if (is.null(coper_data)) {return(NULL)}
   coper_static <- retrieve_static_coper_data(config)
   for(attribute in names(coper_static)) {
     coper_data[[attribute]] <- coper_static[[attribute]]
@@ -185,8 +189,13 @@ generate_covariate_cube <- function(config, dates, scope = c("past", "present")[
   }
 
   # Converting to tibble and adding calculated variables
-  coper_data <- as_tibble(coper_data) |>
-    mutate(date = as.Date(time), .after = y)
+  coper_data <- as_tibble(coper_data)
+  coper_data <- (if(length(dates) > 1) {
+    mutate(coper_data, date = as.Date(time)) |>
+      select(-time)
+  } else {
+    mutate(coper_data, date = dates, .after = y)
+  })
   coper_data <- coper_data |>
     rename(lon = x, lat = y) |>
     mutate(day_of_year = lubridate::yday(date), 

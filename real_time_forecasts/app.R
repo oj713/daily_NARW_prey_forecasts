@@ -4,36 +4,26 @@ library(leafem)
 library(leaflet.extras2)
 
 ######################################  Ugly data preparation code, to swap out
+code_root <- "/mnt/ecocast/projects/students/ojohnson/daily-forecasts"
+species <- ""
+source(file.path(code_root, "setup.R"))
+source(file.path(code_root, "io_stars.R"))
+source(file.path(code_root, "real_time_forecasts/theme_object_starter.R"))
 
-#setwd("..")
-species <- "coelenterates"
-v <- "coel.1.00"
-source("setup.R")
-source("io_stars.R")
+# Retrieve shiny path directory
+shiny_path <- function(species, ...) {
+  get_path_main(species, "shiny_data", ...)
+}
 
-
-regions_sf <- read_sf(dsn = "post_prediction/daily_forecasts_regions/daily_forecasts_regions.shp") |>
+regions_sf <- read_sf(dsn = file.path(code_root, "post_prediction/daily_forecasts_regions/daily_forecasts_regions.shp")) |>
   st_make_valid() |>
   st_transform(crs = 4326)
 
-if (FALSE) {
-  ym_stars <- read_quantile_stars(v_pred_path(v, "monthly"))
-  ym_stars <- ym_stars[regions_sf]
-  m_agg <- aggregate(ym_stars[c("5%", "50%", "95%"),,,], 
-                     by = function(d) (lubridate::month(d)), FUN = mean)
-  m_agg$Uncertainty <- m_agg$`95%` - m_agg$`5%`
-  write_quantile_stars(m_agg, "real_time_forecasts/monthly_averages_plaything.nc")
-  rm(regions_sf, ym_stars, m_agg)
-}
-
-preds <- read_quantile_stars("real_time_forecasts/09_28_2025_to_10_03_2025_plaything.nc")
-preds$Uncertainty <- preds$`95%` - preds$`5%`
-availableDates <- st_get_dimension_values(preds, "date")
-bounds <- st_bbox(preds) |> as.vector()
-
-monthly_averages <- read_quantile_stars("real_time_forecasts/monthly_averages_plaything.nc")
-
-setwd("real_time_forecasts")
+template <- read_quantile_stars(shiny_path("coelenterates", "coelenterates_shiny_forecast_data.nc"))
+availableDates <- st_get_dimension_values(template, "date")
+bounds <- st_bbox(template) |> as.vector()
+predictionColumns <- names(template)
+rm(template)
 
 ###################################### LEAFLET EDITING HELPER FUNCTIONS
 
@@ -109,9 +99,12 @@ add_starsdata_to_leaflet <- function(proxy, stars_obj, paletteColumn) {
 #' @param width int, bootstrap column width 1-12
 #' @return bootstrap column with leaflet object
 starsLeafletOutput <- function(id, width) {
-  column(width = width, class = "leaflet-plot-square",
-         textOutput(paste0(id, "Title")),
-         leafletOutput(id, height = "100%"))
+  column(width = width, 
+         bigelow_card(
+           headerContent = textOutput(paste0(id, "Title")),
+           footerContent = NULL, # no footer here!
+           leafletOutput(id, height = "100%")
+         ))
 }
 
 #' Apply a function to all leaflet objects
@@ -137,31 +130,38 @@ extract_reflayer_values <- function(stars_obj, lon, lat) {
 
 ###################################### OTHER PLOTS
 
-point_over_time <- function(lon, lat, date) {
-  plottableData <- extract_reflayer_values(preds, lon, lat) |>
+#' Plots the value of a spatial tile over available forecast dates
+#' @param stars_obj stars, stars object to use as base data
+#' @param lon dbl, longitude of pt
+#' @param lat dbl, latitude of pt
+#' @param date Date, date of focus
+point_over_time <- function(stars_obj, lon, lat, date) {
+  plottableData <- extract_reflayer_values(stars_obj, lon, lat) |>
     as_tibble()
   
-  ggplot(plottableData, aes(x = date)) +
-    geom_ribbon(aes(ymin = `5%`, ymax = `95%`), fill = "steelblue3", alpha = .5) + 
-    geom_line(aes(y = `50%`), color = "steelblue4") + 
-    theme_bw() + 
-    ylim(0, 1) +
-    labs(x = element_blank(), y = "Patch probability") + 
-    geom_vline(xintercept = date, color = "red") + 
-    theme(panel.background = element_rect(fill = "transparent"))
+  suppressWarnings(
+    ggplot(plottableData, aes(x = date)) +
+      geom_ribbon(aes(ymin = `5%`, ymax = `95%`), fill = "steelblue3", alpha = .5) + 
+      geom_line(aes(y = `50%`), color = "steelblue4") + 
+      theme_bw() + 
+      ylim(0, 1) +
+      labs(x = element_blank(), y = "Patch probability") + 
+      geom_vline(xintercept = date, color = "red") + 
+      theme(plot.background = element_blank())
+  )
 }
-
 
 ###################################### BUILDING THE APPLICATION 
 
 ui <- fluidPage(
-  includeCSS("www/styling.css"),
-  div(class = "header", 
+  theme = bigelow_theme(),
+  includeCSS("www/additionalStyles.css"),
+  bigelow_header(
       h2("EcoMon daily species patch forecasts"),
       selectInput("plotSpecies", label = NULL,
-                  choices = c("Coelenterates", "Other [not implemented]"), 
-                  selected = "Coelenterates")),
-  div(class = "main",
+                  choices = c("coelenterates", "salpa", "siphonophora"), 
+                  selected = "coelenterates")),
+  bigelow_main_body(
     fluidRow(class = "top-row",
       starsLeafletOutput("dailyPlot", 9),
       column(width = 3, class = "settings-sidebar",
@@ -175,30 +175,57 @@ ui <- fluidPage(
                          timeFormat = "%m/%d/%y"),
              selectInput("plotColumn", 
                          label = "Prediction Column:",
-                         choices = names(preds), 
+                         choices = predictionColumns, 
                          selected = "50%"),
              uiOutput("selectedCoordInfo"))
     ),
     fluidRow(class = "bottom-row",
       starsLeafletOutput("monthlyAveragePlot", 6),
       starsLeafletOutput("comparisonPlot", 6)
-    )),
-  div(class = "footer", 
-      div("Contact: Omi Johnson"),
-      img(src='images/bigelow_logo.svg', alt = "Bigelow Laboratory Logo"))
+    )
+  ),
+  bigelow_footer(div("Contact: Omi Johnson"))
 )
 
 server <- function(input, output, session) {
+  # Raw species data to read in
+  forecast_data <- reactive({
+    req(input$plotSpecies)
+    
+    fpath <- shiny_path(input$plotSpecies, paste0(input$plotSpecies, "_shiny_forecast_data.nc"))
+    
+    read_quantile_stars(fpath)
+  })
+  month_aggregates_data <- reactive({
+    req(input$plotSpecies)
+    
+    months <- availableDates |> lubridate::month() |> unique()
+    
+    months_stars <- months |>
+      lapply(function(m) {
+        mpath <- shiny_path(input$plotSpecies, "monthly_aggregates",
+                            paste0(input$plotSpecies, "_monthly_aggregate_m", m, ".nc"))
+        
+        read_quantile_stars(mpath)
+      }) |>
+      setNames(months)
+  })
+  
   # Dynamic plotted values - stars data on display, markers
   plot_reflayer <- reactive({
-    req(input$plotDate, input$plotColumn)
+    req(forecast_data(), month_aggregates_data(), input$plotDate, input$plotColumn)
     
-    preds_subset <- preds[,,,which(availableDates == input$plotDate), drop = TRUE]
-    preds_subset$historical_month <- monthly_averages[input$plotColumn, 
-                                                      month(input$plotDate),, 
-                                                      drop = TRUE]
+    # Forecast data for the specified date, keep all columns
+    preds_subset <- forecast_data()[,,,which(availableDates == input$plotDate), drop = TRUE]
+    
+    # Historical month comparison for specified column
+    month_char <- input$plotDate |> lubridate::month() |> as.character()
+    preds_subset$historical_month <- month_aggregates_data()[[month_char]][input$plotColumn,,]
+    
+    # Difference between present and historical
     preds_subset$difference <- preds_subset[[input$plotColumn]] - preds_subset$historical_month
-    st_crs(preds_subset) <- st_crs(preds)
+    
+    st_crs(preds_subset) <- st_crs(forecast_data())
     preds_subset
   })
   markers <- reactiveValues(data = data.frame())
@@ -331,16 +358,16 @@ server <- function(input, output, session) {
                           values[1:(length(values) - 1)]) |>
         imap(~paste0(.y, ": ", round(.x, 3)))
       
-      return(div(HTML(paste(return_strings, collapse = "<br>")), 
+      return(tagList(HTML(paste(return_strings, collapse = "<br>")), 
                  plotOutput("pointOverTime", width = "100%", height = "10em"),
                  actionButton("deleteSelectedMarker", "Delete Marker", 
-                              class = "deleteButton")))
+                              class = "btn-danger")))
     }
   })
   output$pointOverTime <- renderPlot({
-    req(input$plotDate)
+    req(forecast_data(), input$plotDate)
     coords <- markers$data[active_marker(),]
-    point_over_time(coords$lon, coords$lat, input$plotDate)
+    point_over_time(forecast_data(), coords$lon, coords$lat, input$plotDate)
   }, bg = "transparent")
   
   # Deletes a marker
