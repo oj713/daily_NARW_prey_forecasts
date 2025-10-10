@@ -8,7 +8,7 @@ code_root <- "/mnt/ecocast/projects/students/ojohnson/daily-forecasts"
 species <- ""
 source(file.path(code_root, "setup.R"))
 source(file.path(code_root, "io_stars.R"))
-source(file.path(code_root, "real_time_forecasts/theme_object_starter.R"))
+source("/mnt/ecocast/projects/students/ojohnson/bigelow-shiny-theme/bigelow_theme.R")
 
 # Retrieve shiny path directory
 shiny_path <- function(species, ...) {
@@ -157,7 +157,7 @@ ui <- fluidPage(
   theme = bigelow_theme(),
   includeCSS("www/additionalStyles.css"),
   bigelow_header(
-      h2("EcoMon daily species patch forecasts"),
+      "EcoMon daily species patch forecasts",
       selectInput("plotSpecies", label = NULL,
                   choices = c("coelenterates", "salpa", "siphonophora"), 
                   selected = "coelenterates")),
