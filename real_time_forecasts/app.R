@@ -2,13 +2,13 @@ library(shiny)
 library(leaflet)
 library(leafem)
 library(leaflet.extras2)
+library(bigelowshinytheme)
 
 ######################################  Ugly data preparation code, to swap out
 code_root <- "/mnt/ecocast/projects/students/ojohnson/daily-forecasts"
 species <- ""
 source(file.path(code_root, "setup.R"))
 source(file.path(code_root, "io_stars.R"))
-source("/mnt/ecocast/projects/students/ojohnson/bigelow-shiny-theme/bigelow_theme.R")
 
 # Retrieve shiny path directory
 shiny_path <- function(species, ...) {
