@@ -99,7 +99,7 @@ retrieve_dynamic_coper_data <- function(config, dates, ci_phys, ci_bgc, diagnose
   # Dates checking, throw warning if a date isn't available
   date_available <- (dates %in% ci_phys$meta_db$date) & (dates %in% ci_bgc$meta_db$date)
   if (!all(date_available)) {
-    warning("Date(s) unavailable in Copernicus: ", paste(dates[!date_available], collapse = ", "))
+    warning("Date(s) unavailable in Copernicus, omitting: ", paste(dates[!date_available], collapse = ", "))
     dates <- dates[date_available]
     if (length(dates) == 0) {return(NULL)}
   }
@@ -216,7 +216,7 @@ generate_covariate_cube <- function(config, dates, scope = c("past", "present")[
 #' @param dates list, Date objects to predict OR named, nested list of date objects
 #' @param save_folder str, name of folder to create and save to. No save if NULL.
 #' @param verbose bool, print progression?
-#' @param max_chunk_size int, maximum number of dates to process at a time
+#' @param max_chunk_size int, maximum number of dates to process at a time. Anything over 74 will probably break.
 #' @param desired_quants numeric, quantile percentages to calculate
 #' @param fold_subset int, if not NULL subset workflows to reduce calculation time
 #' @param as_float bool, saving prediction cube values as float or dbl? 
@@ -226,7 +226,7 @@ generate_covariate_cube <- function(config, dates, scope = c("past", "present")[
 generate_prediction_cubes <- function(v, dates, 
                                       save_folder = NULL, 
                                       verbose = TRUE, 
-                                      max_chunk_size = 92, 
+                                      max_chunk_size = 74, 
                                       desired_quants = c(0, .05, .25, .5, .75, .95, 1),
                                       fold_subset = NULL,
                                       as_float = FALSE,

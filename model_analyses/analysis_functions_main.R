@@ -267,7 +267,7 @@ auc_by_month <- function(v,
     as_tibble()
   
   title <- paste(v, "AUC (2.5%, 50%, 97.5%):", 
-                 overall_auc$auc |> quantile(c(.025, .5, .975)) |> 
+                 overall_auc$auc |> quantile(c(.025, .5, .975), na.rm = TRUE) |> 
                    round(3) |> paste(collapse = ", "))
   
   plot <- ggplot(res, aes(x = month)) + 

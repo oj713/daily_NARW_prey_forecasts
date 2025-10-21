@@ -1,29 +1,36 @@
-v_num <- "0.01"
-overwrite <- TRUE
-species_class <- c("jellyfish", "right whale prey")[[2]] # What's the purpose of this data?
+v_num <- "0.00"
+overwrite <- TRUE 
+# What's the purpose of this data?
+species_class <- c("jellyfish", "right whale prey")[[1]] 
 species <- c("coelenterates", "pseudocalanus", "centropages", 
-             "combjellies", "siphonophora", "salpa", "cfin")[[3]]
+             "combjellies", "siphonophora", "salpa", "cfin")[[8]]
+# Version names are ALWAYS the first four letters of the species + version number
 v_name <- paste0(substr(species, 1, 4), ".", v_num)
 
-note <- "Centropages model. Revised dataset, 80% quantile threshold."
+# Elaboration on the significance of this model.
+note <- "Note goes here."
 
-source("setup.R")
+source("setup.R") # setup.R should usually be sourced AFTER defining species. 
 
 # training data 
-strata = "patch" # currently unread
+strata = "patch" # Unread, means to say that training data is stratified by patch
+# What copernicus variables are being used for this model? bottomT = tob
 coper_data_config <- list(vars_static = c("bathy_depth"), #, "bathy_slope"),
                           vars_phys = c("bottomT", "mlotst", "so", "thetao", "vel", "zos"),
-                          vars_bgc = NULL, #c("chl", "no3", "nppv", "o2", "po4", "si"),
+                          vars_bgc = c("chl", "no3", "nppv", "o2", "po4", "si"), #NULL
                           vars_time = c("day_length", "ddx_day_length"))
+# What species data are we using?
 species_data_config <- list(ecomon_column = c("coel_m2", "pseudo_m2", "ctyp_m2",
-                                              "ctenop_m2", "siph_m2", "salps_m2")[[2]],
-                            # Prefix for saved data in input_data
+                                              "ctenop_m2", "siph_m2", "salps_m2")[[7]], #or NULL
+                            # alt_source is an alterative file to be read. must be file name (sans .csv.gz) of valid file in species/input_data folder
+                            # ecomon_column should be NULL if alt_source isn't. 
                             alt_source = NULL, #"corrected_CIV_CVI_m2" for cfin
-                            threshold = list(pre = c(0, 7500, 24000)[[3]],
-                                             post = NULL)) # currently unread
+                            threshold = list(pre = c(0, 7500, 24000)[[1]], # presence threshold
+                                             post = NULL)) # unread
 # model
 seed <- 750
 
+# in theory "MLP Neural Network" with engine "keras" would also be supported here but I haven't tested it. 
 brt <- list(name = "Boosted Regression Tree", 
             engine = "xgboost", 
             trees = 500,
@@ -33,9 +40,11 @@ brt <- list(name = "Boosted Regression Tree",
             min_n = 10, 
             nthread = 4)
 
+# corresponds to named functions in the build_workflows.R file. Steps to apply to recipe. 
+# If you would like to build your own it must accept only recipe object and return a recipe object.
 transformations <- c("step_log_bathy", "step_normalize_numeric")
 
-### ASSEMBLY #############################################
+### ASSEMBLY, DO NOT EDIT #############################################
 
 training_data_config <- list(species = species, 
                              species_data = species_data_config, 

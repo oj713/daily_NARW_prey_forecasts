@@ -7,7 +7,7 @@ regions_sf <- read_sf(dsn = "post_prediction/daily_forecasts_regions/daily_forec
   st_make_valid() |>
   st_transform(crs = 4326)
 # Dates to forecast
-forecast_dates <- seq(as.Date("2025-10-07"), Sys.Date() + 3, by = "days")
+forecast_dates <- seq(Sys.Date() - 3, Sys.Date() + 3, by = "days")
 
 #' Generates a forecast stars object for recent dates
 #'  Length of dates must be less than 90 to prevent memory overload

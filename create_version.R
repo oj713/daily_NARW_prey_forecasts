@@ -1,14 +1,14 @@
-species <- "centropages"
+species <- "testspecies"
 source("setup.R")
 # Creation
 source("data_preparation/data_from_config.R")
 source("build_workflows.R")
 # Analyses
 source("model_analyses/analysis_functions_main.R")
-source("generate_prediction_cubes.R")
+source("generate_prediction_cubes.R") # required for analysis functions
 
 # Assumes yaml_maker.R has already been run
-v <- "cent.0.01"
+v <- "test.0.00"
 config <- read_config(v)
 if (config$training_data$species != species) {
   stop("Species of version is not the same as session defined species.")

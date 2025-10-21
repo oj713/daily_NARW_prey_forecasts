@@ -4,11 +4,11 @@ species <- ""
 source("setup.R")
 source("generate_prediction_cubes.R") # generate predictions
 source("post_prediction/examine_regions_over_time.R") # analyses
-source("post_prediction/plots.R")
+source("post_prediction/plots.R") # analyses
 
 versions_to_predict <- list(
-  list("spec" = "pseudocalanus", "v" = "pseu.0.01"), 
-  list("spec" = "centropages", "v" = "cent.0.01") 
+  list("spec" = "pseudocalanus", "v" = "pseu.0.01"),
+  list("spec" = "centropages", "v" = "cent.0.01")
 )
 
 for (vspec in versions_to_predict) {
@@ -21,8 +21,8 @@ for (vspec in versions_to_predict) {
   v <- vspec$v
   verbose <- TRUE
   as_float_gyc <- read_config(v)$class == "jellyfish"
-  date_start = as.Date("1993-01-01")
-  date_end = as.Date("2019-12-31")
+  date_start = as.Date("1993-01-01") # first available date
+  date_end = as.Date("2019-12-31") # last available date
   
   # Predictions
   res <- generate_yearly_cubes(v, 
@@ -50,7 +50,6 @@ dates_deliberatebreak <-
   list("summer" = as.Date(c("2014/5/20", "2015/6/20", "2015/7/20", "2015/8/20", "2035/9/20", "2035/10/20")),
        "winter" = as.Date(c("2014/11/20", "2014/12/20", "2015/1/20", "2015/2/20", "2015/3/20")))
 
-# v.0.01 = 84 sec when nthread = 1, 31 sec when nthread = 4
 res <- generate_prediction_cubes(v, 
                                  dates_test, 
                                  save_folder = "example_2015", 
