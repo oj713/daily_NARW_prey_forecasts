@@ -45,7 +45,8 @@ get_root <- function(species) {
 }
 
 if (!exists("species")) {
-  species <- readline("Need to define 'species' before running setup. Enter species: ")
+  species <- ""
+  cat("No species has been defined. Species-specific functions will not run as expected.")
 }
 root <- get_root(species)
 

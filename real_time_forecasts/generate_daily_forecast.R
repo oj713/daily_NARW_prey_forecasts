@@ -7,7 +7,7 @@ regions_sf <- read_sf(dsn = "post_prediction/daily_forecasts_regions/daily_forec
   st_make_valid() |>
   st_transform(crs = 4326)
 # Dates to forecast
-forecast_dates <- seq(Sys.Date() - 3, Sys.Date() + 3, by = "days")
+forecast_dates <- seq(as.Date("2025-10-07"), Sys.Date() + 3, by = "days")
 
 #' Generates a forecast stars object for recent dates
 #'  Length of dates must be less than 90 to prevent memory overload
@@ -38,9 +38,14 @@ generate_forecast <- function(v, dates) {
 ##### MAIN LOOP
 
 shiny_species <- list(
+  # Jellyfish
   list("spec" = "coelenterates", "v" = "coel.1.00"), 
   list("spec" = "salpa", "v" = "salp.1.00"),
-  list("spec" = "siphonophora", "v" = "siph.1.00")
+  list("spec" = "siphonophora", "v" = "siph.1.00"),
+  # Calanus
+  list("spec" = "pseudocalanus", "v" = "pseu.0.01"),
+  list("spec" = "centropages", "v" = "cent.0.01"),
+  list("spec" = "cfin", "v" = "cfin.0.01")
 )
 
 for (shiny_spec in shiny_species) {
