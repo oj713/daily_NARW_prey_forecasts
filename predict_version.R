@@ -8,7 +8,11 @@ source("post_prediction/plots.R") # analyses
 
 versions_to_predict <- list(
   list("spec" = "pseudocalanus", "v" = "pseu.0.01"),
-  list("spec" = "centropages", "v" = "cent.0.01")
+  list("spec" = "centropages", "v" = "cent.0.01"),
+  list("spec" = "cfin", "v" = "cfin.0.01"),
+  list("spec" = "salpa", "v" = "salp.1.00"),
+  list("spec" = "coelenterates", "v" = "coel.1.00"),
+  list("spec" = "siphonophora", "v" = "siph.1.00")
 )
 
 for (vspec in versions_to_predict) {
@@ -24,14 +28,15 @@ for (vspec in versions_to_predict) {
   date_start = as.Date("1993-01-01") # first available date
   date_end = as.Date("2019-12-31") # last available date
   
-  # Predictions
-  res <- generate_yearly_cubes(v, 
-                               date_start, 
-                               date_end, 
+  Predictions
+
+  res <- generate_yearly_cubes(v,
+                               date_start,
+                               date_end,
                                date_downsample = NULL,
                                fold_subset = NULL,
                                add = TRUE,
-                               verbose = verbose, 
+                               verbose = verbose,
                                as_float = as_float_gyc)
   
   consolidate_preds_monthly(v, verbose = verbose, as_float = FALSE)
@@ -39,6 +44,7 @@ for (vspec in versions_to_predict) {
   # Plots
   observed_vs_predicted_regional(v)
   plot_monthly_averages(v)
+  plot_monthly_averages(v, shelf_crop = TRUE)
 }
 
 ## Test that things are working alright before running the final version

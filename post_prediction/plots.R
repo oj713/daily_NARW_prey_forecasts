@@ -101,12 +101,22 @@ qshelper_plot_list <- function(v, dates,
 #' Plots averaged monthly values of a version across all years
 #' Assumes existence of monthly consolidated preds
 #' @param v str, version
+#' @param shelf_crop bool, crop results to continental shelf?
 #' @return plot objects, also saved to file 
-plot_monthly_averages <- function(v) {
+plot_monthly_averages <- function(v, shelf_crop = FALSE) {
   if (!file.exists(v_pred_path(v, "monthly"))) {
     stop("Consolidated monthly file must exist.")
   }
   ym_stars <- read_quantile_stars(v_pred_path(v, "monthly"))
+  
+  if (shelf_crop) {
+    regions_sf <- read_sf(dsn = "post_prediction/daily_forecasts_regions/daily_forecasts_regions.shp") |>
+      st_make_valid() |>
+      st_transform(crs = 4326)
+    
+    ym_stars <- ym_stars[regions_sf]
+  }
+  
   m_agg <- aggregate(ym_stars[c("5%", "50%", "95%"),,,], 
                      by = function(d) (lubridate::month(d)), FUN = mean)
   m_agg$uncertainty <- m_agg$`95%` - m_agg$`5%`
@@ -129,7 +139,7 @@ plot_monthly_averages <- function(v) {
   gc()
   
   qshelper_save_plot(list(plot_50, plot_uncertainty), v, 
-               paste0(species, "_plot_monthly_averages"))
+               paste0(species, "_plot_monthly_averages", ifelse(shelf_crop, "_cropped", "")))
 }
 
 #' Plots a set of dates and saves to file
