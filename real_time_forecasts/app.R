@@ -10,6 +10,19 @@ species <- ""
 source(file.path(code_root, "setup.R"))
 source(file.path(code_root, "io_stars.R"))
 
+species_set <- list(
+  "Coelenterates" = "coelenterates",
+  "Salpa" = "salpa", 
+  "Siphonophora" = "siphonophora"
+)
+application_title <- "Jelly Report: Gelatinous zooplankton forecasts"
+species_set_alternate <- list(
+  "C. finmarchicus" = "cfin",
+  "Pseudocalanus" = "pseudocalanus", 
+  "Centropages" = "centropages"
+)
+application_title_alternate <- "Right Whale Prey Report: zooplankton forecasts"
+
 # Retrieve shiny path directory
 shiny_path <- function(species, ...) {
   get_path_main(species, "shiny_data", ...)
@@ -157,10 +170,10 @@ ui <- fluidPage(
   theme = bigelow_theme(),
   includeCSS("www/additionalStyles.css"),
   bigelow_header(
-      "EcoMon daily species patch forecasts",
+      application_title,
       selectInput("plotSpecies", label = NULL,
-                  choices = c("coelenterates", "salpa", "siphonophora"), 
-                  selected = "coelenterates")),
+                  choices = species_set, 
+                  selected = species_set[[1]])),
   bigelow_main_body(
     fluidRow(class = "top-row",
       starsLeafletOutput("dailyPlot", 9),
