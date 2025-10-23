@@ -18,7 +18,7 @@ strata = "patch" # Unread, means to say that training data is stratified by patc
 coper_data_config <- list(vars_static = c("bathy_depth"), #, "bathy_slope"),
                           vars_phys = c("bottomT", "mlotst", "so", "thetao", "vel", "zos"),
                           vars_bgc = c("chl", "no3", "nppv", "o2", "po4", "si"), #NULL
-                          vars_time = c("day_length", "ddx_day_length"))
+                          vars_time = c("day_length", "ddx_day_length")) # other vars?
 # What species data are we using?
 species_data_config <- list(ecomon_column = c("coel_m2", "pseudo_m2", "ctyp_m2",
                                               "ctenop_m2", "siph_m2", "salps_m2")[[7]], #or NULL

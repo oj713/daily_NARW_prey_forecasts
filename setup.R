@@ -17,7 +17,7 @@ suppressPackageStartupMessages(
 #' @param ... additional subdirectories or folders
 #' @return str path
 get_path_main <- function(...) {
-  project_data_dir <- "/mnt/ecocast/projectdata/students/ojohnson/copernicus"
+  project_data_dir <- "/mnt/ecocast/projectdata/ecomoncopernicusmodel/copernicus"
   
   extras <- Filter(Negate(is.null), list(...))
   
