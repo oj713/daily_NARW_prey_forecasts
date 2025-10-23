@@ -17,7 +17,10 @@ set.seed(config$model$seed)
 
 # Retrieve data
 mec <- data_from_config(config)
-dplyr::count(mec, patch) |> mutate(prop = n/sum(n))
+props <- dplyr::count(mec, patch) |> mutate(prop = n/sum(n))
+if (props[[1, 3]] < .05) {
+  stop("Less than 5% presences in input data! Not reliable for modeling.")
+}
 
 # mec_split <- initial_split(mec, prop = 3/4, strata = patch)
 K = 25 # 25 for any scale model 

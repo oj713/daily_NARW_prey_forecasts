@@ -6,6 +6,7 @@ source("generate_prediction_cubes.R") # generate predictions
 source("post_prediction/examine_regions_over_time.R") # analyses
 source("post_prediction/plots.R") # analyses
 
+# Comment out or add items to this list as desired.
 versions_to_predict <- list(
   list("spec" = "pseudocalanus", "v" = "pseu.0.01"),
   list("spec" = "centropages", "v" = "cent.0.01"),
@@ -47,7 +48,7 @@ for (vspec in versions_to_predict) {
   plot_monthly_averages(v, shelf_crop = TRUE)
 }
 
-## Test that things are working alright before running the final version
+## Test that things are working alright before running the final version, optional
 if (FALSE) {
 dates_test <- 
   list("summer" = as.Date(c("2014/5/20", "2015/6/20", "2015/7/20", "2015/8/20", "2015/9/20", "2015/10/20")),

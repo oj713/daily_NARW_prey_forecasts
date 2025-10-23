@@ -7,9 +7,12 @@ regions_sf <- read_sf(dsn = "post_prediction/daily_forecasts_regions/daily_forec
   st_transform(crs = 4326)
 
 shiny_species <- list(
-  list("spec" = "coelenterates", "v" = "coel.1.00"), 
-  list("spec" = "salpa", "v" = "salp.1.00"),
-  list("spec" = "siphonophora", "v" = "siph.1.00")
+  # list("spec" = "coelenterates", "v" = "coel.1.00"), 
+  # list("spec" = "salpa", "v" = "salp.1.00"),
+  # list("spec" = "siphonophora", "v" = "siph.1.00"),
+  list("spec" = "cfin", "v" = "cfin.0.01"),
+  list("spec" = "pseudocalanus", "v" = "pseu.0.01"),
+  list("spec" = "centropages", "v" = "cent.0.01")
 )
 
 # Iterate through each species
