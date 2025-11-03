@@ -1,3 +1,5 @@
+*This code has been migrated to a new repository `ecomoncopernicusmodel` and is no longer updated.*
+
 # Ecomon-Copernicus daily resolution species distribution models
 
 This repository encompasses a pipeline for building 25-fold boosted regression tree (BRT) patch distribution models using [NOAA EcoMon](https://www.fisheries.noaa.gov/new-england-mid-atlantic/ecosystems/monitoring-ecosystem-northeast) abundance data and [Copernicus Marine Data Store](https://data.marine.copernicus.eu/products) oceanographic covariates
@@ -22,4 +24,18 @@ Steps:
 * Verify that configuration parameters resulted in adequate model output, either by checking RStudio plot/text outputs or going to model info folder at `mnt/ecocast/projectdata/students/ojohnson/copernicus/`
 * Update species and version in `predict_version.R` and execute within a shell. Multiple species/version pairs can be run through 
 
-<img width = "90%" alt="Alt text" src="readme_images/codepipeline.png">
+<img width = "90%" alt="Visual representation of code pipeline and supporting files." src="readme_images/codepipeline.png">
+
+## Demo Shiny Application
+
+The repository's `real_time_forecasts` folder also hosts a demo R Shiny application to iteractively view live daily predictions for a set of selected species.
+
+Steps: 
+
+* Choose a list of species to represent in the application. Any species which has not been represented before must have monthly consolidated predictions generated using `real_time_forecasts/generate_monthly_averages.R``
+* Ensure all desired species are included in `real_time_forecasts/generate_daily_forecast.R`. Ideally this script runs daily.
+* Update the `species_set` and `application_title` variables in `real_time_forecasts/app.R` and execute. 
+
+`real_time_forecasts/wishlist_for_application.md` reports features and bugs that were not addressed, but should be in the future.
+
+<img width = "90%" alt = "Screenshot of shiny application output." src = "readme_images/shinyapp.png">

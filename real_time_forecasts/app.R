@@ -4,24 +4,25 @@ library(leafem)
 library(leaflet.extras2)
 library(bigelowshinytheme)
 
-######################################  Ugly data preparation code, to swap out
-code_root <- "/mnt/ecocast/projects/students/ojohnson/daily-forecasts"
+code_root <- "/mnt/ecocast/corecode/R/ecomoncopernicusmodel"
 species <- ""
 source(file.path(code_root, "setup.R"))
 source(file.path(code_root, "io_stars.R"))
 
+## Swap out these variables to change the highlighted species. 
+## Any species here should have had a generate_daily_forecast.R ran for it.
 species_set <- list(
   "Coelenterates" = "coelenterates",
   "Salpa" = "salpa", 
   "Siphonophora" = "siphonophora"
 )
 application_title <- "Jelly Report: Gelatinous zooplankton forecasts"
-species_set_alternate <- list(
-  "C. finmarchicus" = "cfin",
-  "Pseudocalanus" = "pseudocalanus", 
-  "Centropages" = "centropages"
-)
-application_title_alternate <- "Right Whale Prey Report: zooplankton forecasts"
+# species_set <- list(
+#   "C. finmarchicus" = "cfin",
+#   "Pseudocalanus" = "pseudocalanus", 
+#   "Centropages" = "centropages"
+# )
+# application_title <- "Right Whale Prey Report: zooplankton forecasts"
 
 # Retrieve shiny path directory
 shiny_path <- function(species, ...) {
@@ -61,15 +62,16 @@ create_base_leaflet <- function() {
 }
 
 #' Add stars data as a raster image to a leaflet object
-#' @param proxy, leafletProxy, proxy object to add data to
+#' @param proxy_name, string, string identifier of leaflet proxy
 #' @param stars_obj, stars, stars object to add
-#' @param paletteColumn, str, plot column that dictates color palette of raster
+#' @param palette_column, str, plot column that dictates color palette of raster
 #' @return nothing, adds raster image of stars object to leaflet proxy
-add_starsdata_to_leaflet <- function(proxy, stars_obj, paletteColumn) {
+add_starsdata_to_leaflet <- function(proxy_name, stars_obj, palette_column) {
+  
   legendResolution = 7
   
   paletteSettings <- 
-    (if (paletteColumn == "Difference") {
+    (if (palette_column == "difference") {
       palette = colorRampPalette(c("darkorchid4", "darkslateblue", "royalblue3", "deepskyblue2",
                                    "white", "goldenrod2", "darkorange1", "orangered3", "red4"))
       
@@ -81,7 +83,7 @@ add_starsdata_to_leaflet <- function(proxy, stars_obj, paletteColumn) {
         "title" = "Deviation from avg. month"
       )
     } else {
-      palette = function(n) viridis(n, option = ifelse(paletteColumn == "Uncertainty", 
+      palette = function(n) viridis(n, option = ifelse(palette_column == "uncertainty", 
                                                        "inferno", "viridis"))
       
       list(
@@ -90,21 +92,22 @@ add_starsdata_to_leaflet <- function(proxy, stars_obj, paletteColumn) {
         "colors" = rev(palette(legendResolution)),
         "labels" = seq(100, 0, length.out = legendResolution) |> round() |> 
           as.character() |> paste0("%"),
-        "title" = ifelse(paletteColumn == "Uncertainty", paletteColumn, 
-                         paste(paletteColumn, "probability"))
+        "title" = ifelse(palette_column == "uncertainty", str_to_upper(palette_column), 
+                         paste(palette_column, "probability"))
       )
   })
   
-  proxy |>
+  leafletProxy(proxy_name) |>
     clearControls() |>
     leafem::addGeoRaster(stars_obj,
                          colorOptions = paletteSettings$colorOptionsObj,
                          resolution = 192, autozoom = FALSE,
-                         layerId = "active_raster",
+                         layerId = paste0(proxy_name, "_active_raster"),
                          imagequery = FALSE) |>
     addLegend("bottomright", colors = paletteSettings$colors, 
               labels = paletteSettings$labels, opacity = 1) 
-              #title = paletteSettings$title)
+  #title = paletteSettings$title)
+  
 }
 
 #' UI element block to render a Leaflet Stars in this project
@@ -264,17 +267,17 @@ server <- function(input, output, session) {
   
   # Replace data when the selected parameters update
   observeEvent(plot_reflayer(), {
-    add_starsdata_to_leaflet(leafletProxy("dailyPlot"), 
-                    plot_reflayer()[input$plotColumn,,], 
+    add_starsdata_to_leaflet("dailyPlot", 
+                    plot_reflayer()[input$plotColumn,,,drop=TRUE], 
                     input$plotColumn)
     
-    add_starsdata_to_leaflet(leafletProxy("monthlyAveragePlot"), 
-                    plot_reflayer()["historical_month",,], 
+    add_starsdata_to_leaflet("monthlyAveragePlot", 
+                    plot_reflayer()["historical_month",,,drop=TRUE], 
                     input$plotColumn)
     
-    add_starsdata_to_leaflet(leafletProxy("comparisonPlot"), 
-                    plot_reflayer()["difference",,], 
-                    "Difference")
+    add_starsdata_to_leaflet("comparisonPlot", 
+                    plot_reflayer()["difference",,,drop=TRUE], 
+                    "difference")
     
     update_all_markers()
   })
@@ -302,11 +305,12 @@ server <- function(input, output, session) {
   }
   
   ############ HANDLE MAP CLICKS
+  # The clicking code is broken if trying to click on the non-primary plots
   leafletClicks <- reactive({
-    list(input$dailyPlot_click, input$monthlyAveragePlot_click, input$comparisonPlot_click)
+    list(input$dailyPlot_click) #, input$monthlyAveragePlot_click, input$comparisonPlot_click)
   })
   leafletMarkerClicks <- reactive({
-    list(input$dailyPlot_marker_click, input$monthlyAveragePlot_marker_click, input$comparisonPlot_marker_click)
+    list(input$dailyPlot_marker_click) #, input$monthlyAveragePlot_marker_click, input$comparisonPlot_marker_click)
   })
   
   # When a click occurs, identify the latitude, longitude, and marker id (if applicable) 
@@ -361,7 +365,7 @@ server <- function(input, output, session) {
   output$selectedCoordInfo <- renderUI({
     req(plot_reflayer())
     if (is.null(active_marker())) {
-      return("Select or create a marker to see information!")
+      return("Select or create a marker on the main panel to see information!")
     } else {
       coords <- markers$data[active_marker(),]
       values <- extract_reflayer_values(plot_reflayer(), coords$lon, coords$lat)

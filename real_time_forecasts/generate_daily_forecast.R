@@ -1,5 +1,6 @@
 ##### GENERATES DAILY FORECAST DATA FOR ALL SPECIES OF INTEREST
 ###### SHOULD RUN DAILY
+### The "archiving" part of this code is kinda broken but the usable forecast data works great
 species <- ""
 source("setup.R")
 source("generate_prediction_cubes.R")
